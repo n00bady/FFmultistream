@@ -6,7 +6,9 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"sync"
+	"syscall"
 )
 
 type Config struct {
@@ -57,14 +59,24 @@ func startStreaming(ctx context.Context, config Config) error {
 	log.Printf("Starting FFmpeg with PID: %d", cmd.Process.Pid)
 	log.Printf("Pushing streams from %s to %v", config.Origin, config.Destinations)
 
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := cmd.Wait(); err != nil {
-			log.Printf("FFmpeg process exited with error: %v", err)
-		} else {
-			log.Printf("FFmpeg process finished successfully")
+		select {
+		case <-sigChan:
+			log.Printf("Termination signal recieved stopping FFmpeg...")
+			if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+				log.Printf("Error stopping FFmpeg: %v", err)
+			}
+		case <-ctx.Done():
+			log.Printf("Context terminated, stopping FFmpeg...")
+			if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+				log.Printf("Error stopping FFmpeg: %v", err)
+			}
 		}
 	}()
 	wg.Wait()
