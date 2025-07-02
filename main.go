@@ -31,6 +31,7 @@ func main() {
 func startStreaming(ctx context.Context, config Config) error {
 	args := []string{
 		"-listen", "1", // listen for the OBS stream
+		"-timeout", "10", // listening timeout ffmpeg exits after a few minutes not imediatly apparently
 		"-i", config.Origin, // input stream
 		"-c:v", "copy", // copy video, NO re-encoding
 		"-c:a", "copy", // copy audio, NO re-encoding
@@ -41,7 +42,14 @@ func startStreaming(ctx context.Context, config Config) error {
 	for i, d := range config.Destinations {
 		teeOutputs = append(teeOutputs, fmt.Sprintf("[f=flv]%s/%s", d, config.Keys[i]))
 	}
-	teeString := fmt.Sprintf("tee:%s | %s", teeOutputs[0], teeOutputs[1]) // Joins them for tee muxer
+	teeString := "tee:"
+	for i, t := range teeOutputs {
+		if i == len(teeOutputs) - 1 {
+			teeString = teeString + t
+		} else {
+			teeString = teeString + t + " | "
+		}
+	}
 	args = append(args, teeString)
 
 	log.Println("ffmpeg", args)
@@ -53,7 +61,7 @@ func startStreaming(ctx context.Context, config Config) error {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start ffmpeg: %v", err)
+		return fmt.Errorf("failed to start FFmpeg: %v", err)
 	}
 
 	log.Printf("Starting FFmpeg with PID: %d", cmd.Process.Pid)
@@ -80,6 +88,12 @@ func startStreaming(ctx context.Context, config Config) error {
 		}
 	}()
 	wg.Wait()
+
+	if err := cmd.Wait(); err != nil {
+		log.Printf("FFmpeg stopped with error: %v", err)
+	} else {
+		log.Printf("FFmpeg finished!")
+	}
 
 	return nil
 }
