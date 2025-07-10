@@ -9,23 +9,49 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
 )
 
-type Config struct {
-	Origin       string   `toml:"Origin"`
-	Destinations []string `toml:"Destinations"`
-	Keys         []string `toml:"Keys"`
+func main() {
+	AppInst, err := InitApp()
+	if err != nil {
+		log.Fatalf("GUI initialization failed: %v\n", err)
+	}
+
+	var body fyne.CanvasObject
+	body, err = mainView(AppInst)
+	if err != nil {
+		log.Fatalf("mainView failed: %v\n", err)
+	}
+
+	log.Println("Setting fyne App window content...")
+	AppInst.window.SetContent(body)
+
+	AppInst.window.Resize(fyne.NewSize(600, 600))
+
+	log.Println("Running the fyne App...")
+	AppInst.window.ShowAndRun()
+
+	// if err := startStreaming(context.Background(), config); err != nil {
+	// 	log.Printf("Cannot start the streaming process: %v", err)
+	// }
 }
 
-func main() {
+func InitApp() (*AppState, error) {
+	myApp := app.NewWithID("FFmultistream")
+	myWindow := myApp.NewWindow("FFmultistream")
+
 	config, err := LoadConfig()
 	if err != nil {
-		log.Fatalf("Cannot load Config!: %v", err)
+		return nil, fmt.Errorf("Cannot load configuration: %v\n", err)
 	}
 
-	if err := startStreaming(context.Background(), config); err != nil {
-		log.Printf("Cannot start the streaming process: %v", err)
-	}
+	return &AppState{
+		config: config,
+		window: myWindow,
+	}, nil
 }
 
 func startStreaming(ctx context.Context, config Config) error {
@@ -44,7 +70,7 @@ func startStreaming(ctx context.Context, config Config) error {
 	}
 	teeString := "tee:"
 	for i, t := range teeOutputs {
-		if i == len(teeOutputs) - 1 {
+		if i == len(teeOutputs)-1 {
 			teeString = teeString + t
 		} else {
 			teeString = teeString + t + " | "
