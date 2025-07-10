@@ -17,7 +17,6 @@ func mainView(appState *AppState) (fyne.CanvasObject, error) {
 
 	dest := appState.config.Destinations
 
-	// List of destinations
 	list := widget.NewList(
 		func() int {
 			return len(dest)
@@ -47,7 +46,6 @@ func mainView(appState *AppState) (fyne.CanvasObject, error) {
 	listContainer := container.NewVScroll(list)
 	listContainer.SetMinSize(fyne.NewSize(350, 500))
 
-	// Adding new destinations
 	rtmpLabel := widget.NewLabel("rtmp: ")
 	rtmpEntry := widget.NewEntry()
 
@@ -64,18 +62,15 @@ func mainView(appState *AppState) (fyne.CanvasObject, error) {
 		addBtn,
 	)
 
-	// newEntryContainer := container.New(layout.NewGridLayoutWithRows(3), entriesContainer, layout.NewSpacer(), addBtn)
-
-	// FFmpeg Start and Stop buttons
 	startBtn := widget.NewButton("Start!",
 		func() {
 			log.Println("Starting pushing origin stream to destinations...")
-			go startStreaming(appState)
+			go startFFmpeg(appState)
 		},
 	)
 	stopBtn := widget.NewButton("Stop!", func() {
 		log.Println("Stopping ffmpeg...")
-		stopStreaming(appState)
+		stopFFmpeg(appState)
 	})
 	btnContainer := container.New(layout.NewHBoxLayout(),
 		layout.NewSpacer(),
