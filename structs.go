@@ -13,7 +13,9 @@ type Config struct {
 }
 
 type AppState struct {
-	config Config
-	ctx    context.Context
-	window fyne.Window
+	config  Config
+	ctx     context.Context
+	cancel  context.CancelFunc
+	running bool
+	window  fyne.Window
 }
