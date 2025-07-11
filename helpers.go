@@ -10,6 +10,30 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
+func SaveConfig(cfg Config) error {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return fmt.Errorf("failed to find config directory: %v", err)
+	}
+	configPath := filepath.Join(configDir, "multistream")
+
+	if !checkFileExist(configPath) {
+		err := os.Mkdir(configPath, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("failed to create config folder: %v", err)
+		}
+	}
+	b, err := toml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("Marshaling new config failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(configPath, "config.toml"), b, os.ModePerm); err != nil {
+		return fmt.Errorf("Failed to write config file: %v", err)
+	}
+
+	return nil
+}
+
 func LoadConfig() (Config, error) {
 	var cfg Config
 

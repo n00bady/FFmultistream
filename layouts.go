@@ -15,32 +15,30 @@ import (
 func mainView(appState *AppState) (fyne.CanvasObject, error) {
 	log.Println("Creating mainView...")
 
-	dest := appState.config.Destinations
-
 	list := widget.NewList(
 		func() int {
-			return len(dest)
+			return len(appState.config.Destinations)
 		},
 		func() fyne.CanvasObject {
 			return widget.NewLabel("Template")
 		},
 		func(lii widget.ListItemID, co fyne.CanvasObject) {
-			if len(dest) <= 0 {
+			if len(appState.config.Destinations) <= 0 {
 				dialog.ShowError(fmt.Errorf("Destinations are empty!"), appState.window)
 				os.Exit(1)
 			}
 			log.Printf("Updating item with ID: %d", lii)
-			if lii < 0 || lii >= len(dest) {
+			if lii < 0 || lii >= len(appState.config.Destinations) {
 				log.Printf("Invalid item ID: %d", lii)
 				return
 			}
-			d := dest[lii]
+			d := appState.config.Destinations[lii]
 			label, ok := co.(*widget.Label)
 			if !ok {
 				log.Printf("Canvas object is not *widget.Label, its: %s", fmt.Sprintf("%T", co))
 				return
 			}
-			label.SetText(fmt.Sprintf("Destination %d: %s", lii, d))
+			label.SetText(fmt.Sprintf("%d: %s", lii, d))
 		},
 	)
 	listContainer := container.NewVScroll(list)
@@ -55,7 +53,17 @@ func mainView(appState *AppState) (fyne.CanvasObject, error) {
 	entriesContainer := container.New(layout.NewFormLayout(), rtmpLabel, rtmpEntry, keyLabel, keyEntry)
 
 	addBtn := widget.NewButton("Add", func() {
-		log.Println("NOT IMPLEMENTED YET!")
+		// TODO: Checks for valid inputs ?
+		appState.config.Destinations = append(appState.config.Destinations, rtmpEntry.Text)
+		appState.config.Keys = append(appState.config.Keys, keyEntry.Text)
+		if err := SaveConfig(appState.config); err != nil {
+			log.Println("Could not save new config.")
+		} else {
+			rtmpEntry.SetText("")
+			keyEntry.SetText("")
+			log.Println("New Destination and Key saved.")
+			list.Refresh()
+		}
 	})
 	addBtnContainer := container.New(layout.NewHBoxLayout(),
 		layout.NewSpacer(),
@@ -80,12 +88,12 @@ func mainView(appState *AppState) (fyne.CanvasObject, error) {
 		layout.NewSpacer(),
 	)
 
-	body := container.New(layout.NewGridLayoutWithColumns(2), 
-		listContainer, 
-		container.NewVBox(entriesContainer, 
-			addBtnContainer, 
-			layout.NewSpacer(), 
-			btnContainer, 
+	body := container.New(layout.NewGridLayoutWithColumns(2),
+		listContainer,
+		container.NewVBox(entriesContainer,
+			addBtnContainer,
+			layout.NewSpacer(),
+			btnContainer,
 			layout.NewSpacer(),
 		),
 	)
