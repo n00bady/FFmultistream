@@ -30,7 +30,7 @@ func main() {
 	log.Println("Setting fyne App window content...")
 	AppInst.window.SetContent(body)
 
-	AppInst.window.Resize(fyne.NewSize(600, 600))
+	// AppInst.window.Resize(fyne.NewSize(600, 600))
 
 	log.Println("Running the fyne App...")
 	AppInst.window.ShowAndRun()
