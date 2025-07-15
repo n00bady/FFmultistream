@@ -17,7 +17,7 @@ func SaveConfig(cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to find config directory: %v", err)
 	}
-	configPath := filepath.Join(configDir, "multistream")
+	configPath := filepath.Join(configDir, "FFmultistream")
 
 	if !checkFileExist(configPath) {
 		err := os.Mkdir(configPath, os.ModePerm)
@@ -40,7 +40,7 @@ func LoadConfig() (Config, error) {
 	var cfg Config
 
 	configPath, _ := os.UserConfigDir()
-	data, err := os.ReadFile(filepath.Join(configPath, "multistream", "config.toml"))
+	data, err := os.ReadFile(filepath.Join(configPath, "FFmultistream", "config.toml"))
 	if errors.Is(err, os.ErrNotExist) {
 		log.Println("Cannot find config file, creating the default one...")
 		CreateConfig()
@@ -61,7 +61,7 @@ func CreateConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to find config directory: %v", err)
 	}
-	configPath := filepath.Join(configDir, "multistream")
+	configPath := filepath.Join(configDir, "FFmultistream")
 
 	if !checkFileExist(configPath) {
 		err := os.Mkdir(configPath, os.ModePerm)
