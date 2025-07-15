@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -91,6 +93,30 @@ func CreateConfig() error {
 
 func checkFileExist(path string) bool {
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+
+	return true
+}
+
+func IsvalidRTMP(s string) bool {
+	if !strings.HasPrefix(strings.ToLower(s), "rtmp://") {
+		log.Println("RTMP entry doesn't have prefix rtmp://")
+		return false
+	}
+
+	_, err := url.Parse(s)
+	if err != nil {
+		log.Println("RTMP entry is not a valid url.")
+		return false
+	}
+
+	return true
+}
+
+func IsvalidKEY(s string) bool {
+	if s == "" {
+		log.Println("Key entry is empty.")
 		return false
 	}
 

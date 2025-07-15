@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -22,8 +23,10 @@ func mainView(appState *AppState) (fyne.CanvasObject, error) {
 		items,
 		func() fyne.CanvasObject {
 			label := widget.NewLabel("Template")
-			editBtn := widget.NewButton("Edit", nil)
-			delBtn := widget.NewButton("Delete", nil)
+			editBtn := widget.NewButtonWithIcon("", theme.SettingsIcon(), nil)
+			delBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), nil)
+			delBtn.Importance = widget.DangerImportance
+
 			return container.NewHBox(label, layout.NewSpacer(), editBtn, delBtn)
 		},
 		func(lii binding.DataItem, co fyne.CanvasObject) {
@@ -69,7 +72,7 @@ func mainView(appState *AppState) (fyne.CanvasObject, error) {
 		},
 	)
 	listContainer := container.NewVScroll(list)
-	listContainer.SetMinSize(fyne.NewSize(350, 500))
+	// listContainer.SetMinSize(fyne.NewSize(350, 500))
 
 	rtmpLabel := widget.NewLabel("RTMP: ")
 	rtmpEntry := widget.NewEntry()
@@ -80,7 +83,15 @@ func mainView(appState *AppState) (fyne.CanvasObject, error) {
 	entriesContainer := container.New(layout.NewFormLayout(), rtmpLabel, rtmpEntry, keyLabel, keyEntry)
 
 	addBtn := widget.NewButton("Add", func() {
-		// TODO: Checks for valid inputs ?
+		if !IsvalidRTMP(rtmpEntry.Text) {
+			dialog.ShowInformation("Invalid Entry", "RTMP address is not valid.", appState.window)
+			return
+		}
+		if !IsvalidKEY(keyEntry.Text) {
+			dialog.ShowInformation("Key Entry", "The key is empty.", appState.window)
+			return
+		}
+
 		appState.config.Destinations = append(appState.config.Destinations, rtmpEntry.Text)
 		appState.config.Keys = append(appState.config.Keys, keyEntry.Text)
 		if err := SaveConfig(appState.config); err != nil {
@@ -98,16 +109,26 @@ func mainView(appState *AppState) (fyne.CanvasObject, error) {
 		addBtn,
 	)
 
-	startBtn := widget.NewButton("Start!",
-		func() {
-			log.Println("Starting pushing origin stream to destinations...")
-			go startFFmpeg(appState)
-		},
-	)
-	stopBtn := widget.NewButton("Stop!", func() {
+	startBtn := widget.NewButton("Start!", nil)
+	stopBtn := widget.NewButton("Stop!", nil)
+
+	startBtn.OnTapped = func() {
+		log.Println("Starting pushing origin stream to destinations...")
+		go startFFmpeg(appState)
+		startBtn.Disable()
+		stopBtn.Enable()
+	}
+	startBtn.Importance = widget.SuccessImportance
+
+	stopBtn.OnTapped = func() {
 		log.Println("Stopping ffmpeg...")
 		stopFFmpeg(appState)
-	})
+		stopBtn.Disable()
+		startBtn.Enable()
+	}
+	stopBtn.Importance = widget.DangerImportance
+	stopBtn.Disable()
+
 	btnContainer := container.New(layout.NewHBoxLayout(),
 		layout.NewSpacer(),
 		container.NewPadded(startBtn),
@@ -122,7 +143,6 @@ func mainView(appState *AppState) (fyne.CanvasObject, error) {
 			addBtnContainer,
 			layout.NewSpacer(),
 			btnContainer,
-			layout.NewSpacer(),
 		),
 	)
 
@@ -144,12 +164,12 @@ func editPopup(appState *AppState, index int) {
 		dialog.ShowInformation("WIP", "NOT IMPLEMENTED YET", appState.window)
 	})
 
-	closeBtn := widget.NewButton("Close", nil)	
+	closeBtn := widget.NewButton("Close", nil)
 
-	entriesContainer := container.New(layout.NewFormLayout(), 
-		rtmpLabel, 
-		rtmpEntry, 
-		keyLabel, 
+	entriesContainer := container.New(layout.NewFormLayout(),
+		rtmpLabel,
+		rtmpEntry,
+		keyLabel,
 		keyEntry,
 	)
 
@@ -161,7 +181,7 @@ func editPopup(appState *AppState, index int) {
 		layout.NewSpacer(),
 	)
 
-	content := container.NewVBox(layout.NewSpacer(), entriesContainer, btnContainer) 
+	content := container.NewVBox(layout.NewSpacer(), entriesContainer, btnContainer)
 
 	popup := widget.NewModalPopUp(content, appState.window.Canvas())
 	popup.Resize(fyne.NewSize(500, 150))
