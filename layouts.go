@@ -71,6 +71,9 @@ func mainView(appState *AppState) (fyne.CanvasObject, error) {
 			}
 		},
 	)
+	list.OnSelected = func(id widget.ListItemID) { 
+		list.UnselectAll() 
+	}
 	listContainer := container.NewVScroll(list)
 	// listContainer.SetMinSize(fyne.NewSize(350, 500))
 
