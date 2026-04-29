@@ -40,7 +40,6 @@ func InitApp(sigChan chan os.Signal) (*AppState, error) {
 	myApp := app.NewWithID("FFmultistream")
 	myWindow := myApp.NewWindow("FFmultistream")
 
-	var _ fyne.Theme = (*myTheme)(nil)
 	myApp.Settings().SetTheme(&myTheme{})
 
 	appState := &AppState{}
@@ -70,4 +69,3 @@ func InitApp(sigChan chan os.Signal) (*AppState, error) {
 
 	return appState, nil
 }
-

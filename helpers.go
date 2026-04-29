@@ -100,7 +100,7 @@ func checkFileExist(path string) bool {
 }
 
 func IsvalidRTMP(s string) bool {
-	if !strings.HasPrefix(strings.ToLower(s), "rtmp://") {
+	if !strings.HasPrefix(strings.ToLower(s), "rtmp://") && !strings.HasPrefix(strings.ToLower(s), "rtmps://") {
 		log.Println("RTMP entry doesn't have prefix rtmp://")
 		return false
 	}
