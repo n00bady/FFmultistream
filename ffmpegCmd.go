@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -11,8 +10,6 @@ import (
 	"os/exec"
 	"strings"
 )
-
-var errAlreadyRunning = errors.New("ffmpeg is already running")
 
 func buildFFmpegArgs(cfg Config) []string {
 	args := []string{
@@ -52,76 +49,33 @@ func enabledCount(cfg Config) int {
 }
 
 func startFFmpeg(appState *AppState) error {
-	appState.mu.Lock()
-	if appState.running {
-		appState.mu.Unlock()
-		return errAlreadyRunning
+	ctx, args, _, err := appState.BeginRun()
+	if err != nil {
+		return err
 	}
-	if enabledCount(appState.config) == 0 {
-		appState.mu.Unlock()
-		return errors.New("no enabled destinations")
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	appState.ctx = ctx
-	appState.cancel = cancel
-	appState.running = true
-	appState.done = make(chan struct{})
-	args := buildFFmpegArgs(appState.config)
-	appState.mu.Unlock()
+	defer appState.MarkStopped()
 
 	log.Println("ffmpeg", args)
-
 	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
-
-	markStopped := func() {
-		appState.mu.Lock()
-		appState.running = false
-		appState.cancel = nil
-		done := appState.done
-		appState.done = nil
-		appState.mu.Unlock()
-		if done != nil {
-			close(done)
-		}
-	}
 
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
-		markStopped()
 		return fmt.Errorf("failed to get stderr pipe: %v", err)
 	}
 	cmd.Stdout = os.Stdout
 
 	if err := cmd.Start(); err != nil {
-		markStopped()
 		return fmt.Errorf("failed to start FFmpeg: %v", err)
 	}
 
 	log.Printf("Starting FFmpeg with PID: %d", cmd.Process.Pid)
-	log.Printf("Pushing streams from %s to %v", appState.config.Origin, appState.config.Destinations)
-
 	go scanIntoLogs(stderrPipe, appState.logs)
 
 	waitErr := cmd.Wait()
-	ctxErr := ctx.Err()
-	markStopped()
-
-	if waitErr != nil && ctxErr != context.Canceled {
+	if waitErr != nil && ctx.Err() != context.Canceled {
 		return fmt.Errorf("FFmpeg exited with error: %v", waitErr)
 	}
 	return nil
-}
-
-func stopFFmpeg(appState *AppState) <-chan struct{} {
-	appState.mu.Lock()
-	cancel := appState.cancel
-	done := appState.done
-	appState.mu.Unlock()
-	if cancel != nil {
-		cancel()
-		log.Println("FFmpeg process stopped.")
-	}
-	return done
 }
 
 func scanIntoLogs(r io.Reader, buf *ringBuffer) {

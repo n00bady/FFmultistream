@@ -15,7 +15,6 @@ type Config struct {
 type AppState struct {
 	mu      sync.Mutex
 	config  Config
-	ctx     context.Context
 	cancel  context.CancelFunc
 	running bool
 	done    chan struct{}

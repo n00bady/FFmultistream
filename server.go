@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"html/template"
 	"log"
 	"net/http"
@@ -83,18 +84,10 @@ type logsView struct {
 }
 
 func (s *Server) snapshot(r *http.Request) baseView {
-	s.state.mu.Lock()
-	defer s.state.mu.Unlock()
-	cfg := s.state.config
-	cfgCopy := Config{
-		Origin:       cfg.Origin,
-		Destinations: append([]string(nil), cfg.Destinations...),
-		Keys:         append([]string(nil), cfg.Keys...),
-		Enabled:      append([]bool(nil), cfg.Enabled...),
-	}
+	cfg, running := s.state.Snapshot()
 	return baseView{
-		Config:   cfgCopy,
-		Running:  s.state.running,
+		Config:   cfg,
+		Running:  running,
 		Flash:    flashMessages[r.URL.Query().Get("msg")],
 		FlashErr: flashErrors[r.URL.Query().Get("err")],
 	}
@@ -163,13 +156,7 @@ func (s *Server) handleAddDestination(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.state.mu.Lock()
-	s.state.config.Destinations = append(s.state.config.Destinations, rtmp)
-	s.state.config.Keys = append(s.state.config.Keys, key)
-	s.state.config.Enabled = append(s.state.config.Enabled, true)
-	cfg := s.state.config
-	s.state.mu.Unlock()
-
+	cfg := s.state.AddDestination(rtmp, key)
 	if err := SaveConfig(cfg); err != nil {
 		log.Printf("SaveConfig failed: %v", err)
 		redirectFlash(w, r, "/", "err", "save_failed")
@@ -221,17 +208,11 @@ func (s *Server) handleUpdateDestination(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	s.state.mu.Lock()
-	if idx < 0 || idx >= len(s.state.config.Destinations) {
-		s.state.mu.Unlock()
+	cfg, ok := s.state.UpdateDestination(idx, rtmp, key)
+	if !ok {
 		redirectFlash(w, r, "/", "err", "not_found")
 		return
 	}
-	s.state.config.Destinations[idx] = rtmp
-	s.state.config.Keys[idx] = key
-	cfg := s.state.config
-	s.state.mu.Unlock()
-
 	if err := SaveConfig(cfg); err != nil {
 		log.Printf("SaveConfig failed: %v", err)
 		redirectFlash(w, r, "/", "err", "save_failed")
@@ -250,18 +231,11 @@ func (s *Server) handleDeleteDestination(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	s.state.mu.Lock()
-	if idx < 0 || idx >= len(s.state.config.Destinations) {
-		s.state.mu.Unlock()
+	cfg, ok := s.state.DeleteDestination(idx)
+	if !ok {
 		redirectFlash(w, r, "/", "err", "not_found")
 		return
 	}
-	s.state.config.Destinations = append(s.state.config.Destinations[:idx], s.state.config.Destinations[idx+1:]...)
-	s.state.config.Keys = append(s.state.config.Keys[:idx], s.state.config.Keys[idx+1:]...)
-	s.state.config.Enabled = append(s.state.config.Enabled[:idx], s.state.config.Enabled[idx+1:]...)
-	cfg := s.state.config
-	s.state.mu.Unlock()
-
 	if err := SaveConfig(cfg); err != nil {
 		log.Printf("SaveConfig failed: %v", err)
 		redirectFlash(w, r, "/", "err", "save_failed")
@@ -291,11 +265,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.state.mu.Lock()
-	s.state.config.Origin = origin
-	cfg := s.state.config
-	s.state.mu.Unlock()
-
+	cfg := s.state.SetOrigin(origin)
 	if err := SaveConfig(cfg); err != nil {
 		log.Printf("SaveConfig failed: %v", err)
 		redirectFlash(w, r, "/settings", "err", "save_failed")
@@ -309,25 +279,10 @@ func (s *Server) handleStartStream(w http.ResponseWriter, r *http.Request) {
 		redirectFlash(w, r, "/", "err", "forbidden")
 		return
 	}
-
-	s.state.mu.Lock()
-	if s.state.running {
-		s.state.mu.Unlock()
-		redirectFlash(w, r, "/", "err", "already_running")
+	if err := s.state.CanStart(); err != nil {
+		redirectFlash(w, r, "/", "err", startErrorCode(err))
 		return
 	}
-	if len(s.state.config.Destinations) == 0 {
-		s.state.mu.Unlock()
-		redirectFlash(w, r, "/", "err", "no_destinations")
-		return
-	}
-	if enabledCount(s.state.config) == 0 {
-		s.state.mu.Unlock()
-		redirectFlash(w, r, "/", "err", "no_enabled")
-		return
-	}
-	s.state.mu.Unlock()
-
 	go func() {
 		if err := startFFmpeg(s.state); err != nil {
 			log.Printf("ffmpeg error: %v", err)
@@ -341,14 +296,11 @@ func (s *Server) handleStopStream(w http.ResponseWriter, r *http.Request) {
 		redirectFlash(w, r, "/", "err", "forbidden")
 		return
 	}
-	s.state.mu.Lock()
-	running := s.state.running
-	s.state.mu.Unlock()
-	if !running {
+	if !s.state.Running() {
 		redirectFlash(w, r, "/", "err", "not_running")
 		return
 	}
-	stopFFmpeg(s.state)
+	s.state.Stop()
 	redirectFlash(w, r, "/", "msg", "stopped")
 }
 
@@ -362,21 +314,11 @@ func (s *Server) handleToggleDestination(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	s.state.mu.Lock()
-	if idx < 0 || idx >= len(s.state.config.Destinations) {
-		s.state.mu.Unlock()
+	cfg, nowEnabled, wasRunning, ok := s.state.ToggleDestination(idx)
+	if !ok {
 		redirectFlash(w, r, "/", "err", "not_found")
 		return
 	}
-	if len(s.state.config.Enabled) != len(s.state.config.Destinations) {
-		normalizeEnabled(&s.state.config)
-	}
-	s.state.config.Enabled[idx] = !s.state.config.Enabled[idx]
-	nowEnabled := s.state.config.Enabled[idx]
-	cfg := s.state.config
-	wasRunning := s.state.running
-	s.state.mu.Unlock()
-
 	if err := SaveConfig(cfg); err != nil {
 		log.Printf("SaveConfig failed: %v", err)
 		redirectFlash(w, r, "/", "err", "save_failed")
@@ -384,8 +326,7 @@ func (s *Server) handleToggleDestination(w http.ResponseWriter, r *http.Request)
 	}
 
 	if wasRunning {
-		done := stopFFmpeg(s.state)
-		if done != nil {
+		if done := s.state.Stop(); done != nil {
 			<-done
 		}
 		if enabledCount(cfg) > 0 {
@@ -419,4 +360,17 @@ func (s *Server) parseIndex(w http.ResponseWriter, r *http.Request) (int, bool) 
 		return 0, false
 	}
 	return idx, true
+}
+
+func startErrorCode(err error) string {
+	switch {
+	case errors.Is(err, errAlreadyRunning):
+		return "already_running"
+	case errors.Is(err, errNoDestinations):
+		return "no_destinations"
+	case errors.Is(err, errNoEnabled):
+		return "no_enabled"
+	default:
+		return "start_failed"
+	}
 }

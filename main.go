@@ -43,7 +43,7 @@ func main() {
 	go func() {
 		<-sigChan
 		log.Println("Termination signal received, stopping FFmpeg and shutting down...")
-		stopFFmpeg(state)
+		state.Stop()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = httpServer.Shutdown(ctx)
@@ -58,7 +58,7 @@ func main() {
 		log.Fatalf("http server error: %v", err)
 	}
 
-	stopFFmpeg(state)
+	state.Stop()
 	log.Println("Goodbye.")
 }
 
