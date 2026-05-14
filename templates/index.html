@@ -1,20 +1,16 @@
 {{define "body"}}
-<div class="card stream-hero {{if .Running}}running{{else}}stopped{{end}}">
-  <div>
-    <div class="label">Stream</div>
-    <div class="state">
-      {{if .Running}}<span class="pulse"></span>Running{{else}}Stopped{{end}}
-    </div>
-    <div class="muted" style="margin-top:.3rem; font-size:.85rem;">
-      Origin <code class="kbd">{{.Config.Origin}}</code>
+<div class="card stream-hero">
+  <div class="hero-info">
+    <div class="hero-origin">
+      <code class="kbd">{{.Config.Origin}}</code>
       <a class="icon-link" href="/origin/edit" title="Edit origin" aria-label="Edit origin">
-        <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
           <path d="M12.146.146a.5.5 0 01.708 0l3 3a.5.5 0 010 .708l-10 10a.5.5 0 01-.168.11l-5 2a.5.5 0 01-.65-.65l2-5a.5.5 0 01.11-.168l10-10zM11.207 2.5L13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 01.5.5v.5h.5a.5.5 0 01.5.5v.5h.293l6.5-6.5z"/>
         </svg>
       </a>
     </div>
   </div>
-  <div>
+  <div class="hero-action">
     {{if .Running}}
     <form class="inline" method="post" action="/stream/stop">
       <input type="submit" class="danger btn-lg" value="Stop stream">
@@ -40,18 +36,12 @@
   {{range $i, $d := .Config.Destinations}}
     {{$enabled := index $.Config.Enabled $i}}
     <div class="dest {{if not $enabled}}paused{{end}}">
-      <div class="dest-main">
-        <div class="dest-url">{{$d}}</div>
-        <div class="dest-meta">
-          {{if $enabled}}
-            <span class="badge active"><span class="dot"></span>Active</span>
-          {{else}}
-            <span class="badge paused"><span class="dot"></span>Paused</span>
-          {{end}}
-          <span>Key</span>
-          <code>{{index $.MaskedKeys $i}}</code>
-        </div>
-      </div>
+      {{if $enabled}}
+        <span class="badge active"><span class="dot"></span>Active</span>
+      {{else}}
+        <span class="badge paused"><span class="dot"></span>Paused</span>
+      {{end}}
+      <div class="dest-url">{{$d}}</div>
       <div class="dest-actions">
         <form class="inline" method="post" action="/destinations/{{$i}}/toggle">
           <input type="submit" value="{{if $enabled}}Pause{{else}}Resume{{end}}">

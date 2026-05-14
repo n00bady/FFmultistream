@@ -163,15 +163,3 @@ func IsvalidKEY(s string) bool {
 	return true
 }
 
-func maskKey(s string) string {
-	const dot = "•"
-	n := len([]rune(s))
-	if n == 0 {
-		return ""
-	}
-	if n <= 4 {
-		return strings.Repeat(dot, n)
-	}
-	runes := []rune(s)
-	return string(runes[:2]) + strings.Repeat(dot, n-4) + string(runes[n-2:])
-}

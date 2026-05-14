@@ -108,7 +108,6 @@ type baseView struct {
 
 type indexView struct {
 	baseView
-	MaskedKeys []string
 }
 
 type editView struct {
@@ -175,11 +174,7 @@ func redirectFlash(w http.ResponseWriter, r *http.Request, path, kind, code stri
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	base := s.snapshot(r)
 	base.NavActive = "home"
-	masked := make([]string, len(base.Config.Keys))
-	for i, k := range base.Config.Keys {
-		masked[i] = maskKey(k)
-	}
-	s.render(w, s.tpl.index, indexView{baseView: base, MaskedKeys: masked})
+	s.render(w, s.tpl.index, indexView{baseView: base})
 }
 
 func (s *Server) handleAddDestinationForm(w http.ResponseWriter, r *http.Request) {

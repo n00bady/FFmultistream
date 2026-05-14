@@ -51,8 +51,8 @@
   header.site {
     background: var(--surface);
     border-bottom: 1px solid var(--border);
-    padding: .85rem 0;
-    margin-bottom: 1.75rem;
+    padding: .35rem 0;
+    margin-bottom: 1.5rem;
   }
   header.site .inner {
     display: flex;
@@ -62,7 +62,7 @@
   }
   header.site h1 {
     margin: 0;
-    font-size: 1.05rem;
+    font-size: .95rem;
     font-weight: 600;
     letter-spacing: -.01em;
   }
@@ -77,7 +77,7 @@
   }
   nav.tabs { display: flex; gap: .25rem; }
   nav.tabs a {
-    padding: .4rem .8rem;
+    padding: .25rem .7rem;
     border-radius: var(--radius-sm);
     color: var(--text-muted);
     text-decoration: none;
@@ -86,6 +86,7 @@
   }
   nav.tabs a:hover { background: var(--surface-2); color: var(--text); }
   nav.tabs a.active { background: var(--accent-soft); color: var(--accent); }
+  nav.tabs button { padding: .25rem .7rem; font-size: .9rem; }
 
   main { padding-bottom: 3rem; }
 
@@ -102,7 +103,7 @@
   .section-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: .6rem;
     margin: 1.75rem 0 .85rem;
   }
   .section-header h2 { margin: 0; }
@@ -133,73 +134,44 @@
   /* Stream hero */
   .stream-hero {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
+    align-items: flex-start;
     padding: 1.1rem 1.25rem;
-    gap: 1rem;
+    gap: .85rem;
+    background: transparent;
+    border: none;
+    box-shadow: none;
   }
-  .stream-hero.running { border-left: 3px solid var(--success); }
-  .stream-hero.stopped { border-left: 3px solid var(--text-soft); }
-  .stream-hero .label { font-size: .78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
-  .stream-hero .state { font-size: 1.4rem; font-weight: 600; letter-spacing: -.01em; }
-  .stream-hero.running .state { color: var(--success); }
-  .stream-hero.stopped .state { color: var(--text); }
-  .stream-hero .pulse {
-    display: inline-block;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--success);
-    margin-right: .55rem;
-    vertical-align: middle;
-    box-shadow: 0 0 0 0 rgba(52, 211, 153, .55);
-    animation: pulse 1.8s infinite;
-  }
-  @keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, .5); }
-    70% { box-shadow: 0 0 0 10px rgba(52, 211, 153, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
-  }
+  .hero-action { display: flex; }
+  .hero-info { display: flex; flex-direction: column; gap: .45rem; min-width: 0; }
+  .hero-origin { display: flex; align-items: center; gap: .4rem; min-width: 0; }
+  .hero-origin .kbd { font-size: .95rem; padding: .2rem .55rem; }
 
   /* Destination cards */
-  .dest-list { display: flex; flex-direction: column; gap: .6rem; }
+  .dest-list { display: flex; flex-direction: column; gap: .4rem; }
   .dest {
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: transparent;
+    border: none;
     border-radius: var(--radius);
-    padding: .9rem 1.1rem;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: .75rem;
-    align-items: center;
-    transition: border-color .12s, box-shadow .12s;
-  }
-  .dest:hover { border-color: var(--border-strong); }
-  .dest.paused { background: var(--surface-2); }
-  .dest.paused .dest-url { opacity: .55; }
-  .dest-main { min-width: 0; }
-  .dest-url {
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: .92rem;
-    word-break: break-all;
-    color: var(--text);
-  }
-  .dest-meta {
-    margin-top: .25rem;
-    font-size: .8rem;
-    color: var(--text-muted);
+    padding: .45rem .9rem;
     display: flex;
     align-items: center;
-    gap: .55rem;
-    flex-wrap: wrap;
+    gap: .75rem;
+    transition: background .12s;
   }
-  .dest-meta code {
+  .dest:hover { background: var(--surface-2); }
+  .dest.paused .dest-url { opacity: .55; }
+  .dest-url {
+    flex: 1;
+    min-width: 0;
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    background: transparent;
-    padding: 0;
-    color: var(--text-muted);
+    font-size: .92rem;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .dest-actions { display: flex; align-items: center; gap: .35rem; }
+  .dest-actions { display: flex; align-items: center; gap: .35rem; flex-shrink: 0; }
   .dest-empty {
     background: var(--surface);
     border: 1px dashed var(--border-strong);
