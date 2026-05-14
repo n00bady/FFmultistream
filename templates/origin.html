@@ -1,10 +1,10 @@
 {{define "body"}}
-<h2>Settings</h2>
+<h2>Edit origin</h2>
 <div class="card card-pad">
-  <form method="post" action="/settings">
+  <form method="post" action="/origin">
     <div class="form-row">
       <label for="origin">Origin URL</label>
-      <input type="text" name="origin" id="origin" value="{{.Config.Origin}}" required>
+      <input type="text" name="origin" id="origin" value="{{.Config.Origin}}" autofocus required>
       <p class="field-hint">The RTMP URL ffmpeg listens on. Point OBS at this. Default: <code>rtmp://127.0.0.1:1935/test</code></p>
     </div>
     <div class="form-actions">

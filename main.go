@@ -33,7 +33,7 @@ func main() {
 	srv := newServer(state, tpl)
 	httpServer := &http.Server{
 		Addr:              *addr,
-		Handler:           srv.routes(),
+		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

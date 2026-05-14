@@ -99,6 +99,28 @@
   }
   h2:first-child { margin-top: 0; }
 
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 1.75rem 0 .85rem;
+  }
+  .section-header h2 { margin: 0; }
+  .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    color: var(--text-muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    text-decoration: none;
+    transition: color .12s, border-color .12s, background .12s;
+  }
+  .btn-icon:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -263,7 +285,7 @@
     color: var(--text);
     margin-bottom: .35rem;
   }
-  input[type=text], input[type=url] {
+  input[type=text], input[type=url], input[type=password] {
     width: 100%;
     padding: .55rem .7rem;
     border: 1px solid var(--border-strong);
@@ -274,7 +296,7 @@
     color: var(--text);
     transition: border-color .12s, box-shadow .12s;
   }
-  input[type=text]:focus, input[type=url]:focus {
+  input[type=text]:focus, input[type=url]:focus, input[type=password]:focus {
     outline: none;
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-soft);
@@ -288,6 +310,17 @@
   }
   .form-actions { display: flex; gap: .55rem; align-items: center; margin-top: 1.1rem; }
   form.inline { display: inline; margin: 0; }
+
+  .icon-link {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-muted);
+    text-decoration: none;
+    margin-left: .25rem;
+    vertical-align: middle;
+    transition: color .12s;
+  }
+  .icon-link:hover { color: var(--accent); }
 
   /* Flash */
   .flash {
@@ -343,9 +376,13 @@
   <div class="container inner">
     <h1><span class="dot"></span>FFmultistream</h1>
     <nav class="tabs">
+      {{if ne .NavActive "login"}}
       <a href="/" class="{{if eq .NavActive "home"}}active{{end}}">Stream</a>
-      <a href="/settings" class="{{if eq .NavActive "settings"}}active{{end}}">Settings</a>
       <a href="/logs" class="{{if eq .NavActive "logs"}}active{{end}}">Logs</a>
+      <form class="inline" method="post" action="/logout">
+        <button type="submit" class="ghost">Sign out</button>
+      </form>
+      {{end}}
     </nav>
   </div>
 </header>

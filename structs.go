@@ -10,6 +10,8 @@ type Config struct {
 	Destinations []string `toml:"Destinations"`
 	Keys         []string `toml:"Keys"`
 	Enabled      []bool   `toml:"Enabled"`
+	Username     string   `toml:"Username"`
+	Password     string   `toml:"Password"`
 }
 
 type AppState struct {

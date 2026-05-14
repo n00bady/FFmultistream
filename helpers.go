@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -63,7 +65,38 @@ func LoadConfig() (Config, error) {
 		return cfg, fmt.Errorf("failed to unmarshal config file: %v", err)
 	}
 	normalizeEnabled(&cfg)
+	if ensureCredentials(&cfg) {
+		if err := SaveConfig(cfg); err != nil {
+			log.Printf("failed to persist generated credentials: %v", err)
+		}
+	}
 	return cfg, nil
+}
+
+func ensureCredentials(cfg *Config) bool {
+	changed := false
+	if cfg.Username == "" {
+		cfg.Username = "admin"
+		changed = true
+	}
+	if cfg.Password == "" {
+		cfg.Password = randomHex(20)
+		changed = true
+	}
+	if changed {
+		log.Println("Generated UI credentials (stored in config.toml):")
+		log.Printf("  username: %s", cfg.Username)
+		log.Printf("  password: %s", cfg.Password)
+	}
+	return changed
+}
+
+func randomHex(n int) string {
+	b := make([]byte, (n+1)/2)
+	if _, err := rand.Read(b); err != nil {
+		log.Fatalf("failed to read random bytes: %v", err)
+	}
+	return hex.EncodeToString(b)[:n]
 }
 
 func normalizeEnabled(cfg *Config) {

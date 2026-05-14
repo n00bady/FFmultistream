@@ -69,6 +69,12 @@ func (s *AppState) ToggleDestination(i int) (cfg Config, nowEnabled, wasRunning,
 	return cloneConfig(s.config), s.config.Enabled[i], s.running, true
 }
 
+func (s *AppState) Credentials() (string, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.config.Username, s.config.Password
+}
+
 func (s *AppState) SetOrigin(origin string) Config {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/hex"
 	"errors"
 	"html/template"
 	"log"
@@ -8,11 +11,19 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
+)
+
+const (
+	sessionCookie = "ffms_session"
+	sessionTTL    = 7 * 24 * time.Hour
 )
 
 type Server struct {
-	state *AppState
-	tpl   *templates
+	state    *AppState
+	tpl      *templates
+	sessions sync.Map
 }
 
 func newServer(state *AppState, tpl *templates) *Server {
@@ -23,26 +34,54 @@ func (s *Server) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	mux.HandleFunc("POST /destinations", s.handleAddDestination)
+	mux.HandleFunc("GET /destinations/new", s.handleAddDestinationForm)
 	mux.HandleFunc("GET /destinations/{i}/edit", s.handleEditDestination)
 	mux.HandleFunc("POST /destinations/{i}", s.handleUpdateDestination)
 	mux.HandleFunc("POST /destinations/{i}/delete", s.handleDeleteDestination)
 	mux.HandleFunc("POST /destinations/{i}/toggle", s.handleToggleDestination)
-	mux.HandleFunc("GET /settings", s.handleSettings)
-	mux.HandleFunc("POST /settings", s.handleUpdateSettings)
+	mux.HandleFunc("GET /origin/edit", s.handleEditOriginForm)
+	mux.HandleFunc("POST /origin", s.handleUpdateOrigin)
 	mux.HandleFunc("POST /stream/start", s.handleStartStream)
 	mux.HandleFunc("POST /stream/stop", s.handleStopStream)
 	mux.HandleFunc("GET /logs", s.handleLogs)
+	mux.HandleFunc("GET /login", s.handleLoginGET)
+	mux.HandleFunc("POST /login", s.handleLoginPOST)
+	mux.HandleFunc("POST /logout", s.handleLogout)
 	return mux
 }
 
+func (s *Server) isAuthenticated(r *http.Request) bool {
+	c, err := r.Cookie(sessionCookie)
+	if err != nil || c.Value == "" {
+		return false
+	}
+	_, ok := s.sessions.Load(c.Value)
+	return ok
+}
+
+func (s *Server) createSession() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		log.Fatalf("session token: %v", err)
+	}
+	token := hex.EncodeToString(b)
+	s.sessions.Store(token, struct{}{})
+	return token
+}
+
+func (s *Server) revokeSession(token string) {
+	s.sessions.Delete(token)
+}
+
 var flashMessages = map[string]string{
-	"added":   "Destination added.",
-	"saved":   "Saved.",
-	"deleted": "Destination deleted.",
-	"started": "Stream started.",
-	"stopped": "Stream stopped.",
-	"paused":  "Destination paused.",
-	"resumed": "Destination resumed.",
+	"added":      "Destination added.",
+	"saved":      "Saved.",
+	"deleted":    "Destination deleted.",
+	"started":    "Stream started.",
+	"stopped":    "Stream stopped.",
+	"paused":     "Destination paused.",
+	"resumed":    "Destination resumed.",
+	"logged_out": "Signed out.",
 }
 
 var flashErrors = map[string]string{
@@ -56,6 +95,7 @@ var flashErrors = map[string]string{
 	"save_failed":     "Failed to save configuration.",
 	"start_failed":    "Failed to start ffmpeg.",
 	"forbidden":       "Request rejected (cross-origin).",
+	"invalid_login":   "Invalid username or password.",
 }
 
 type baseView struct {
@@ -81,6 +121,12 @@ type editView struct {
 type logsView struct {
 	baseView
 	Logs []string
+}
+
+type loginView struct {
+	Flash     string
+	FlashErr  string
+	NavActive string
 }
 
 func (s *Server) snapshot(r *http.Request) baseView {
@@ -136,30 +182,32 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	s.render(w, s.tpl.index, indexView{baseView: base, MaskedKeys: masked})
 }
 
+func (s *Server) handleAddDestinationForm(w http.ResponseWriter, r *http.Request) {
+	base := s.snapshot(r)
+	base.NavActive = "home"
+	s.render(w, s.tpl.add, base)
+}
+
 func (s *Server) handleAddDestination(w http.ResponseWriter, r *http.Request) {
-	if !s.checkOrigin(r) {
-		redirectFlash(w, r, "/", "err", "forbidden")
-		return
-	}
 	if err := r.ParseForm(); err != nil {
-		redirectFlash(w, r, "/", "err", "invalid_rtmp")
+		redirectFlash(w, r, "/destinations/new", "err", "invalid_rtmp")
 		return
 	}
 	rtmp := strings.TrimSpace(r.PostFormValue("rtmp"))
 	key := strings.TrimSpace(r.PostFormValue("key"))
 	if !IsvalidRTMP(rtmp) {
-		redirectFlash(w, r, "/", "err", "invalid_rtmp")
+		redirectFlash(w, r, "/destinations/new", "err", "invalid_rtmp")
 		return
 	}
 	if !IsvalidKEY(key) {
-		redirectFlash(w, r, "/", "err", "invalid_key")
+		redirectFlash(w, r, "/destinations/new", "err", "invalid_key")
 		return
 	}
 
 	cfg := s.state.AddDestination(rtmp, key)
 	if err := SaveConfig(cfg); err != nil {
 		log.Printf("SaveConfig failed: %v", err)
-		redirectFlash(w, r, "/", "err", "save_failed")
+		redirectFlash(w, r, "/destinations/new", "err", "save_failed")
 		return
 	}
 	redirectFlash(w, r, "/", "msg", "added")
@@ -185,10 +233,6 @@ func (s *Server) handleEditDestination(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUpdateDestination(w http.ResponseWriter, r *http.Request) {
-	if !s.checkOrigin(r) {
-		redirectFlash(w, r, "/", "err", "forbidden")
-		return
-	}
 	idx, ok := s.parseIndex(w, r)
 	if !ok {
 		return
@@ -222,10 +266,6 @@ func (s *Server) handleUpdateDestination(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleDeleteDestination(w http.ResponseWriter, r *http.Request) {
-	if !s.checkOrigin(r) {
-		redirectFlash(w, r, "/", "err", "forbidden")
-		return
-	}
 	idx, ok := s.parseIndex(w, r)
 	if !ok {
 		return
@@ -244,41 +284,33 @@ func (s *Server) handleDeleteDestination(w http.ResponseWriter, r *http.Request)
 	redirectFlash(w, r, "/", "msg", "deleted")
 }
 
-func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleEditOriginForm(w http.ResponseWriter, r *http.Request) {
 	base := s.snapshot(r)
-	base.NavActive = "settings"
-	s.render(w, s.tpl.settings, base)
+	base.NavActive = "home"
+	s.render(w, s.tpl.origin, base)
 }
 
-func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
-	if !s.checkOrigin(r) {
-		redirectFlash(w, r, "/settings", "err", "forbidden")
-		return
-	}
+func (s *Server) handleUpdateOrigin(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		redirectFlash(w, r, "/settings", "err", "invalid_rtmp")
+		redirectFlash(w, r, "/origin/edit", "err", "invalid_rtmp")
 		return
 	}
 	origin := strings.TrimSpace(r.PostFormValue("origin"))
 	if !IsvalidRTMP(origin) {
-		redirectFlash(w, r, "/settings", "err", "invalid_rtmp")
+		redirectFlash(w, r, "/origin/edit", "err", "invalid_rtmp")
 		return
 	}
 
 	cfg := s.state.SetOrigin(origin)
 	if err := SaveConfig(cfg); err != nil {
 		log.Printf("SaveConfig failed: %v", err)
-		redirectFlash(w, r, "/settings", "err", "save_failed")
+		redirectFlash(w, r, "/origin/edit", "err", "save_failed")
 		return
 	}
-	redirectFlash(w, r, "/settings", "msg", "saved")
+	redirectFlash(w, r, "/", "msg", "saved")
 }
 
 func (s *Server) handleStartStream(w http.ResponseWriter, r *http.Request) {
-	if !s.checkOrigin(r) {
-		redirectFlash(w, r, "/", "err", "forbidden")
-		return
-	}
 	if err := s.state.CanStart(); err != nil {
 		redirectFlash(w, r, "/", "err", startErrorCode(err))
 		return
@@ -292,10 +324,6 @@ func (s *Server) handleStartStream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStopStream(w http.ResponseWriter, r *http.Request) {
-	if !s.checkOrigin(r) {
-		redirectFlash(w, r, "/", "err", "forbidden")
-		return
-	}
 	if !s.state.Running() {
 		redirectFlash(w, r, "/", "err", "not_running")
 		return
@@ -305,10 +333,6 @@ func (s *Server) handleStopStream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleToggleDestination(w http.ResponseWriter, r *http.Request) {
-	if !s.checkOrigin(r) {
-		redirectFlash(w, r, "/", "err", "forbidden")
-		return
-	}
 	idx, ok := s.parseIndex(w, r)
 	if !ok {
 		return
@@ -360,6 +384,57 @@ func (s *Server) parseIndex(w http.ResponseWriter, r *http.Request) (int, bool) 
 		return 0, false
 	}
 	return idx, true
+}
+
+func (s *Server) handleLoginGET(w http.ResponseWriter, r *http.Request) {
+	if s.isAuthenticated(r) {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	s.render(w, s.tpl.login, loginView{
+		Flash:     flashMessages[r.URL.Query().Get("msg")],
+		FlashErr:  flashErrors[r.URL.Query().Get("err")],
+		NavActive: "login",
+	})
+}
+
+func (s *Server) handleLoginPOST(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		redirectFlash(w, r, "/login", "err", "invalid_login")
+		return
+	}
+	user := r.PostFormValue("username")
+	pass := r.PostFormValue("password")
+	expU, expP := s.state.Credentials()
+	userOK := subtle.ConstantTimeCompare([]byte(user), []byte(expU)) == 1
+	passOK := subtle.ConstantTimeCompare([]byte(pass), []byte(expP)) == 1
+	if !userOK || !passOK {
+		redirectFlash(w, r, "/login", "err", "invalid_login")
+		return
+	}
+	token := s.createSession()
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookie,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(sessionTTL.Seconds()),
+	})
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if c, err := r.Cookie(sessionCookie); err == nil {
+		s.revokeSession(c.Value)
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:   sessionCookie,
+		Value:  "",
+		Path:   "/",
+		MaxAge: -1,
+	})
+	redirectFlash(w, r, "/login", "msg", "logged_out")
 }
 
 func startErrorCode(err error) string {

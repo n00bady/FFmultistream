@@ -7,6 +7,11 @@
     </div>
     <div class="muted" style="margin-top:.3rem; font-size:.85rem;">
       Origin <code class="kbd">{{.Config.Origin}}</code>
+      <a class="icon-link" href="/origin/edit" title="Edit origin" aria-label="Edit origin">
+        <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+          <path d="M12.146.146a.5.5 0 01.708 0l3 3a.5.5 0 010 .708l-10 10a.5.5 0 01-.168.11l-5 2a.5.5 0 01-.65-.65l2-5a.5.5 0 01.11-.168l10-10zM11.207 2.5L13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 01.5.5v.5h.5a.5.5 0 01.5.5v.5h.293l6.5-6.5z"/>
+        </svg>
+      </a>
     </div>
   </div>
   <div>
@@ -22,7 +27,14 @@
   </div>
 </div>
 
-<h2>Destinations</h2>
+<div class="section-header">
+  <h2>Destinations</h2>
+  <a class="btn-icon" href="/destinations/new" title="Add destination" aria-label="Add destination">
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+      <path d="M8 2.5a.5.5 0 01.5.5v4.5H13a.5.5 0 010 1H8.5V13a.5.5 0 01-1 0V8.5H3a.5.5 0 010-1h4.5V3a.5.5 0 01.5-.5z"/>
+    </svg>
+  </a>
+</div>
 {{if .Config.Destinations}}
 <div class="dest-list">
   {{range $i, $d := .Config.Destinations}}
@@ -54,25 +66,8 @@
 </div>
 {{else}}
 <div class="dest-empty">
-  No destinations yet. Add one below to get started.
+  No destinations yet. Use the <strong>+</strong> button above to add one.
 </div>
 {{end}}
-
-<h2>Add destination</h2>
-<div class="card card-pad">
-  <form method="post" action="/destinations">
-    <div class="form-row">
-      <label for="rtmp">RTMP URL</label>
-      <input type="text" name="rtmp" id="rtmp" placeholder="rtmp://a.rtmp.youtube.com/live2" required>
-    </div>
-    <div class="form-row">
-      <label for="key">Stream key</label>
-      <input type="text" name="key" id="key" placeholder="xxxx-xxxx-xxxx-xxxx" required>
-    </div>
-    <div class="form-actions">
-      <input type="submit" class="primary" value="Add destination">
-    </div>
-  </form>
-</div>
 {{end}}
 {{template "base" .}}
