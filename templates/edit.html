@@ -1,0 +1,20 @@
+{{define "body"}}
+<h2>Edit destination #{{.Index}}</h2>
+<div class="panel">
+<form method="post" action="/destinations/{{.Index}}">
+  <div class="form-row">
+    <label for="rtmp">RTMP URL</label>
+    <input type="text" name="rtmp" id="rtmp" value="{{.RTMP}}" required>
+  </div>
+  <div class="form-row">
+    <label for="key">Stream Key</label>
+    <input type="text" name="key" id="key" value="{{.Key}}" required>
+  </div>
+  <div class="actions">
+    <input type="submit" class="primary" value="Save">
+    <a href="/">Cancel</a>
+  </div>
+</form>
+</div>
+{{end}}
+{{template "base" .}}

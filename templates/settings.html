@@ -1,0 +1,19 @@
+{{define "body"}}
+<h2>Settings</h2>
+<div class="panel">
+<form method="post" action="/settings">
+  <div class="form-row">
+    <label for="origin">Origin (RTMP URL ffmpeg listens on for OBS)</label>
+    <input type="text" name="origin" id="origin" value="{{.Config.Origin}}" required>
+    <p class="muted">Default: <code>rtmp://127.0.0.1:1935/test</code>. Configure OBS to push to this URL.</p>
+  </div>
+  <div class="actions">
+    <input type="submit" class="primary" value="Save">
+    <a href="/">Cancel</a>
+  </div>
+</form>
+</div>
+
+<p class="muted">Changes to the origin take effect on the next stream start.</p>
+{{end}}
+{{template "base" .}}

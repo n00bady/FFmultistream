@@ -1,0 +1,12 @@
+{{define "body"}}
+<h2>FFmpeg logs</h2>
+<p class="muted">Last {{len .Logs}} lines from ffmpeg stderr. Page auto-refreshes every 3 seconds while the stream is running.</p>
+{{if .Running}}<meta http-equiv="refresh" content="3">{{end}}
+{{if .Logs}}
+<pre class="logs">{{range .Logs}}{{.}}
+{{end}}</pre>
+{{else}}
+<p class="muted">No logs yet. Start the stream to populate.</p>
+{{end}}
+{{end}}
+{{template "base" .}}
