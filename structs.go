@@ -9,6 +9,7 @@ type Config struct {
 	Origin       string   `toml:"Origin"`
 	Destinations []string `toml:"Destinations"`
 	Keys         []string `toml:"Keys"`
+	Enabled      []bool   `toml:"Enabled"`
 }
 
 type AppState struct {
@@ -17,6 +18,7 @@ type AppState struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
 	running bool
+	done    chan struct{}
 	logs    *ringBuffer
 }
 

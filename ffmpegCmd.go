@@ -32,10 +32,23 @@ func buildFFmpegArgs(cfg Config) []string {
 
 	var teeOutputs []string
 	for i, d := range cfg.Destinations {
+		if i < len(cfg.Enabled) && !cfg.Enabled[i] {
+			continue
+		}
 		teeOutputs = append(teeOutputs, fmt.Sprintf("[f=flv:onfail=ignore]%s/%s", d, cfg.Keys[i]))
 	}
 	args = append(args, strings.Join(teeOutputs, "|"))
 	return args
+}
+
+func enabledCount(cfg Config) int {
+	n := 0
+	for i := range cfg.Destinations {
+		if i >= len(cfg.Enabled) || cfg.Enabled[i] {
+			n++
+		}
+	}
+	return n
 }
 
 func startFFmpeg(appState *AppState) error {
@@ -44,14 +57,15 @@ func startFFmpeg(appState *AppState) error {
 		appState.mu.Unlock()
 		return errAlreadyRunning
 	}
-	if len(appState.config.Destinations) == 0 {
+	if enabledCount(appState.config) == 0 {
 		appState.mu.Unlock()
-		return errors.New("no destinations configured")
+		return errors.New("no enabled destinations")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	appState.ctx = ctx
 	appState.cancel = cancel
 	appState.running = true
+	appState.done = make(chan struct{})
 	args := buildFFmpegArgs(appState.config)
 	appState.mu.Unlock()
 
@@ -59,21 +73,27 @@ func startFFmpeg(appState *AppState) error {
 
 	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
+	markStopped := func() {
 		appState.mu.Lock()
 		appState.running = false
 		appState.cancel = nil
+		done := appState.done
+		appState.done = nil
 		appState.mu.Unlock()
+		if done != nil {
+			close(done)
+		}
+	}
+
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		markStopped()
 		return fmt.Errorf("failed to get stderr pipe: %v", err)
 	}
 	cmd.Stdout = os.Stdout
 
 	if err := cmd.Start(); err != nil {
-		appState.mu.Lock()
-		appState.running = false
-		appState.cancel = nil
-		appState.mu.Unlock()
+		markStopped()
 		return fmt.Errorf("failed to start FFmpeg: %v", err)
 	}
 
@@ -83,12 +103,8 @@ func startFFmpeg(appState *AppState) error {
 	go scanIntoLogs(stderrPipe, appState.logs)
 
 	waitErr := cmd.Wait()
-
-	appState.mu.Lock()
-	appState.running = false
-	appState.cancel = nil
 	ctxErr := ctx.Err()
-	appState.mu.Unlock()
+	markStopped()
 
 	if waitErr != nil && ctxErr != context.Canceled {
 		return fmt.Errorf("FFmpeg exited with error: %v", waitErr)
@@ -96,15 +112,16 @@ func startFFmpeg(appState *AppState) error {
 	return nil
 }
 
-func stopFFmpeg(appState *AppState) error {
+func stopFFmpeg(appState *AppState) <-chan struct{} {
 	appState.mu.Lock()
 	cancel := appState.cancel
+	done := appState.done
 	appState.mu.Unlock()
 	if cancel != nil {
 		cancel()
 		log.Println("FFmpeg process stopped.")
 	}
-	return nil
+	return done
 }
 
 func scanIntoLogs(r io.Reader, buf *ringBuffer) {

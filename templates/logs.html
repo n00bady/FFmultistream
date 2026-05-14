@@ -1,12 +1,16 @@
 {{define "body"}}
-<h2>FFmpeg logs</h2>
-<p class="muted">Last {{len .Logs}} lines from ffmpeg stderr. Page auto-refreshes every 3 seconds while the stream is running.</p>
+<div style="display:flex; align-items:baseline; justify-content:space-between; gap:1rem;">
+  <h2 style="margin:0;">FFmpeg logs</h2>
+  <span class="muted" style="font-size:.8rem;">
+    {{len .Logs}} line{{if ne (len .Logs) 1}}s{{end}}{{if .Running}} &middot; auto-refreshing{{end}}
+  </span>
+</div>
 {{if .Running}}<meta http-equiv="refresh" content="3">{{end}}
 {{if .Logs}}
-<pre class="logs">{{range .Logs}}{{.}}
+<pre class="logs" style="margin-top:.85rem;">{{range .Logs}}{{.}}
 {{end}}</pre>
 {{else}}
-<p class="muted">No logs yet. Start the stream to populate.</p>
+<div class="dest-empty" style="margin-top:.85rem;">No logs yet. Start the stream to populate.</div>
 {{end}}
 {{end}}
 {{template "base" .}}

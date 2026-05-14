@@ -1,56 +1,78 @@
 {{define "body"}}
-<div class="status {{if .Running}}running{{else}}stopped{{end}}">
-  <span><strong>Stream:</strong> {{if .Running}}running{{else}}stopped{{end}}</span>
-  {{if .Running}}
-  <form class="inline" method="post" action="/stream/stop">
-    <input type="submit" class="danger" value="Stop">
-  </form>
-  {{else}}
-  <form class="inline" method="post" action="/stream/start">
-    <input type="submit" class="primary" value="Start">
-  </form>
-  {{end}}
+<div class="card stream-hero {{if .Running}}running{{else}}stopped{{end}}">
+  <div>
+    <div class="label">Stream</div>
+    <div class="state">
+      {{if .Running}}<span class="pulse"></span>Running{{else}}Stopped{{end}}
+    </div>
+    <div class="muted" style="margin-top:.3rem; font-size:.85rem;">
+      Origin <code class="kbd">{{.Config.Origin}}</code>
+    </div>
+  </div>
+  <div>
+    {{if .Running}}
+    <form class="inline" method="post" action="/stream/stop">
+      <input type="submit" class="danger btn-lg" value="Stop stream">
+    </form>
+    {{else}}
+    <form class="inline" method="post" action="/stream/start">
+      <input type="submit" class="success btn-lg" value="Start stream">
+    </form>
+    {{end}}
+  </div>
 </div>
-
-<h2>Origin</h2>
-<p><code>{{.Config.Origin}}</code> &middot; <a href="/settings">edit</a></p>
 
 <h2>Destinations</h2>
 {{if .Config.Destinations}}
-<table>
-  <thead><tr><th>RTMP URL</th><th>Key</th><th></th></tr></thead>
-  <tbody>
+<div class="dest-list">
   {{range $i, $d := .Config.Destinations}}
-    <tr>
-      <td><code>{{$d}}</code></td>
-      <td><span class="muted">{{index $.MaskedKeys $i}}</span></td>
-      <td class="actions">
-        <a href="/destinations/{{$i}}/edit">edit</a>
-        <form class="inline" method="post" action="/destinations/{{$i}}/delete" onsubmit="return confirm('Delete this destination?');">
-          <input type="submit" class="danger" value="delete">
+    {{$enabled := index $.Config.Enabled $i}}
+    <div class="dest {{if not $enabled}}paused{{end}}">
+      <div class="dest-main">
+        <div class="dest-url">{{$d}}</div>
+        <div class="dest-meta">
+          {{if $enabled}}
+            <span class="badge active"><span class="dot"></span>Active</span>
+          {{else}}
+            <span class="badge paused"><span class="dot"></span>Paused</span>
+          {{end}}
+          <span>Key</span>
+          <code>{{index $.MaskedKeys $i}}</code>
+        </div>
+      </div>
+      <div class="dest-actions">
+        <form class="inline" method="post" action="/destinations/{{$i}}/toggle">
+          <input type="submit" value="{{if $enabled}}Pause{{else}}Resume{{end}}">
         </form>
-      </td>
-    </tr>
+        <a class="btn ghost" href="/destinations/{{$i}}/edit">Edit</a>
+        <form class="inline" method="post" action="/destinations/{{$i}}/delete" onsubmit="return confirm('Delete this destination?');">
+          <input type="submit" class="danger" value="Delete">
+        </form>
+      </div>
+    </div>
   {{end}}
-  </tbody>
-</table>
+</div>
 {{else}}
-<p class="muted">No destinations configured yet.</p>
+<div class="dest-empty">
+  No destinations yet. Add one below to get started.
+</div>
 {{end}}
 
 <h2>Add destination</h2>
-<div class="panel">
-<form method="post" action="/destinations">
-  <div class="form-row">
-    <label for="rtmp">RTMP URL</label>
-    <input type="text" name="rtmp" id="rtmp" placeholder="rtmp://a.rtmp.youtube.com/live2" required>
-  </div>
-  <div class="form-row">
-    <label for="key">Stream Key</label>
-    <input type="text" name="key" id="key" required>
-  </div>
-  <input type="submit" class="primary" value="Add destination">
-</form>
+<div class="card card-pad">
+  <form method="post" action="/destinations">
+    <div class="form-row">
+      <label for="rtmp">RTMP URL</label>
+      <input type="text" name="rtmp" id="rtmp" placeholder="rtmp://a.rtmp.youtube.com/live2" required>
+    </div>
+    <div class="form-row">
+      <label for="key">Stream key</label>
+      <input type="text" name="key" id="key" placeholder="xxxx-xxxx-xxxx-xxxx" required>
+    </div>
+    <div class="form-actions">
+      <input type="submit" class="primary" value="Add destination">
+    </div>
+  </form>
 </div>
 {{end}}
 {{template "base" .}}

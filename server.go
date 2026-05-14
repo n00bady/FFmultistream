@@ -25,6 +25,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /destinations/{i}/edit", s.handleEditDestination)
 	mux.HandleFunc("POST /destinations/{i}", s.handleUpdateDestination)
 	mux.HandleFunc("POST /destinations/{i}/delete", s.handleDeleteDestination)
+	mux.HandleFunc("POST /destinations/{i}/toggle", s.handleToggleDestination)
 	mux.HandleFunc("GET /settings", s.handleSettings)
 	mux.HandleFunc("POST /settings", s.handleUpdateSettings)
 	mux.HandleFunc("POST /stream/start", s.handleStartStream)
@@ -39,6 +40,8 @@ var flashMessages = map[string]string{
 	"deleted": "Destination deleted.",
 	"started": "Stream started.",
 	"stopped": "Stream stopped.",
+	"paused":  "Destination paused.",
+	"resumed": "Destination resumed.",
 }
 
 var flashErrors = map[string]string{
@@ -48,16 +51,18 @@ var flashErrors = map[string]string{
 	"already_running": "Stream is already running.",
 	"not_running":     "Stream is not running.",
 	"no_destinations": "No destinations configured.",
+	"no_enabled":      "All destinations are paused.",
 	"save_failed":     "Failed to save configuration.",
 	"start_failed":    "Failed to start ffmpeg.",
 	"forbidden":       "Request rejected (cross-origin).",
 }
 
 type baseView struct {
-	Config   Config
-	Running  bool
-	Flash    string
-	FlashErr string
+	Config    Config
+	Running   bool
+	Flash     string
+	FlashErr  string
+	NavActive string
 }
 
 type indexView struct {
@@ -85,6 +90,7 @@ func (s *Server) snapshot(r *http.Request) baseView {
 		Origin:       cfg.Origin,
 		Destinations: append([]string(nil), cfg.Destinations...),
 		Keys:         append([]string(nil), cfg.Keys...),
+		Enabled:      append([]bool(nil), cfg.Enabled...),
 	}
 	return baseView{
 		Config:   cfgCopy,
@@ -129,6 +135,7 @@ func redirectFlash(w http.ResponseWriter, r *http.Request, path, kind, code stri
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	base := s.snapshot(r)
+	base.NavActive = "home"
 	masked := make([]string, len(base.Config.Keys))
 	for i, k := range base.Config.Keys {
 		masked[i] = maskKey(k)
@@ -159,6 +166,7 @@ func (s *Server) handleAddDestination(w http.ResponseWriter, r *http.Request) {
 	s.state.mu.Lock()
 	s.state.config.Destinations = append(s.state.config.Destinations, rtmp)
 	s.state.config.Keys = append(s.state.config.Keys, key)
+	s.state.config.Enabled = append(s.state.config.Enabled, true)
 	cfg := s.state.config
 	s.state.mu.Unlock()
 
@@ -176,6 +184,7 @@ func (s *Server) handleEditDestination(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	base := s.snapshot(r)
+	base.NavActive = "home"
 	if idx < 0 || idx >= len(base.Config.Destinations) {
 		redirectFlash(w, r, "/", "err", "not_found")
 		return
@@ -249,6 +258,7 @@ func (s *Server) handleDeleteDestination(w http.ResponseWriter, r *http.Request)
 	}
 	s.state.config.Destinations = append(s.state.config.Destinations[:idx], s.state.config.Destinations[idx+1:]...)
 	s.state.config.Keys = append(s.state.config.Keys[:idx], s.state.config.Keys[idx+1:]...)
+	s.state.config.Enabled = append(s.state.config.Enabled[:idx], s.state.config.Enabled[idx+1:]...)
 	cfg := s.state.config
 	s.state.mu.Unlock()
 
@@ -261,7 +271,9 @@ func (s *Server) handleDeleteDestination(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
-	s.render(w, s.tpl.settings, s.snapshot(r))
+	base := s.snapshot(r)
+	base.NavActive = "settings"
+	s.render(w, s.tpl.settings, base)
 }
 
 func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
@@ -309,6 +321,11 @@ func (s *Server) handleStartStream(w http.ResponseWriter, r *http.Request) {
 		redirectFlash(w, r, "/", "err", "no_destinations")
 		return
 	}
+	if enabledCount(s.state.config) == 0 {
+		s.state.mu.Unlock()
+		redirectFlash(w, r, "/", "err", "no_enabled")
+		return
+	}
 	s.state.mu.Unlock()
 
 	go func() {
@@ -335,8 +352,61 @@ func (s *Server) handleStopStream(w http.ResponseWriter, r *http.Request) {
 	redirectFlash(w, r, "/", "msg", "stopped")
 }
 
+func (s *Server) handleToggleDestination(w http.ResponseWriter, r *http.Request) {
+	if !s.checkOrigin(r) {
+		redirectFlash(w, r, "/", "err", "forbidden")
+		return
+	}
+	idx, ok := s.parseIndex(w, r)
+	if !ok {
+		return
+	}
+
+	s.state.mu.Lock()
+	if idx < 0 || idx >= len(s.state.config.Destinations) {
+		s.state.mu.Unlock()
+		redirectFlash(w, r, "/", "err", "not_found")
+		return
+	}
+	if len(s.state.config.Enabled) != len(s.state.config.Destinations) {
+		normalizeEnabled(&s.state.config)
+	}
+	s.state.config.Enabled[idx] = !s.state.config.Enabled[idx]
+	nowEnabled := s.state.config.Enabled[idx]
+	cfg := s.state.config
+	wasRunning := s.state.running
+	s.state.mu.Unlock()
+
+	if err := SaveConfig(cfg); err != nil {
+		log.Printf("SaveConfig failed: %v", err)
+		redirectFlash(w, r, "/", "err", "save_failed")
+		return
+	}
+
+	if wasRunning {
+		done := stopFFmpeg(s.state)
+		if done != nil {
+			<-done
+		}
+		if enabledCount(cfg) > 0 {
+			go func() {
+				if err := startFFmpeg(s.state); err != nil {
+					log.Printf("ffmpeg restart error: %v", err)
+				}
+			}()
+		}
+	}
+
+	code := "paused"
+	if nowEnabled {
+		code = "resumed"
+	}
+	redirectFlash(w, r, "/", "msg", code)
+}
+
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	base := s.snapshot(r)
+	base.NavActive = "logs"
 	lines := s.state.logs.Snapshot()
 	s.render(w, s.tpl.logs, logsView{baseView: base, Logs: lines})
 }

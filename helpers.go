@@ -62,7 +62,23 @@ func LoadConfig() (Config, error) {
 	if err := toml.Unmarshal(data, &cfg); err != nil {
 		return cfg, fmt.Errorf("failed to unmarshal config file: %v", err)
 	}
+	normalizeEnabled(&cfg)
 	return cfg, nil
+}
+
+func normalizeEnabled(cfg *Config) {
+	if len(cfg.Enabled) == len(cfg.Destinations) {
+		return
+	}
+	enabled := make([]bool, len(cfg.Destinations))
+	for i := range enabled {
+		if i < len(cfg.Enabled) {
+			enabled[i] = cfg.Enabled[i]
+		} else {
+			enabled[i] = true
+		}
+	}
+	cfg.Enabled = enabled
 }
 
 func CreateConfig() error {
@@ -78,6 +94,7 @@ func CreateConfig() error {
 		Origin:       "rtmp://0.0.0.0:1935/test",
 		Destinations: []string{"rtmp://a.rtmp.youtube.com/live2", "rtmp://live.twitch.tv/app"},
 		Keys:         []string{"youtube_key", "twitch_key"},
+		Enabled:      []bool{true, true},
 	}
 
 	b, err := toml.Marshal(cfg)

@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	addr := flag.String("addr", "0.0.0.0:8765", "address to bind the web UI on")
+	addr := flag.String("uiaddr", "0.0.0.0:8765", "address (host:port) to bind the web UI on")
 	openBrowser := flag.Bool("open", true, "open the UI in the default browser on start")
 	flag.Parse()
 
