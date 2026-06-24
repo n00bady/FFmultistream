@@ -5,22 +5,46 @@ import (
 	"sync"
 )
 
-type Config struct {
-	Origin       string   `toml:"Origin"`
-	Destinations []string `toml:"Destinations"`
-	Keys         []string `toml:"Keys"`
-	Enabled      []bool   `toml:"Enabled"`
-	Username     string   `toml:"Username"`
-	Password     string   `toml:"Password"`
+type Destination struct {
+	RTMP    string `toml:"RTMP"`
+	Key     string `toml:"Key"`
+	Enabled bool   `toml:"Enabled"`
 }
 
-type AppState struct {
+type Origin struct {
+	ID           string        `toml:"ID"`
+	URL          string        `toml:"URL"`
+	Destinations []Destination `toml:"Destinations"`
+}
+
+type Config struct {
+	Origins  []Origin `toml:"Origins"`
+	Username string   `toml:"Username"`
+	Password string   `toml:"Password"`
+
+	// Legacy fields (read-only) used for one-shot migration from the
+	// previous single-origin schema.
+	LegacyOrigin       string   `toml:"Origin,omitempty"`
+	LegacyDestinations []string `toml:"Destinations,omitempty"`
+	LegacyKeys         []string `toml:"Keys,omitempty"`
+	LegacyEnabled      []bool   `toml:"Enabled,omitempty"`
+}
+
+type OriginRuntime struct {
 	mu      sync.Mutex
-	config  Config
+	origin  Origin
 	cancel  context.CancelFunc
 	running bool
 	done    chan struct{}
 	logs    *ringBuffer
+}
+
+type AppState struct {
+	mu       sync.RWMutex
+	origins  map[string]*OriginRuntime
+	order    []string
+	username string
+	password string
 }
 
 type ringBuffer struct {

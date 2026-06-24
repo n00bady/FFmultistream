@@ -1,7 +1,7 @@
 {{define "body"}}
 <h2>Edit destination</h2>
 <div class="card card-pad">
-  <form method="post" action="/destinations/{{.Index}}">
+  <form method="post" action="/origins/{{.OriginID}}/destinations/{{.Index}}">
     <div class="form-row">
       <label for="rtmp">RTMP URL</label>
       <input type="text" name="rtmp" id="rtmp" value="{{.RTMP}}" required>

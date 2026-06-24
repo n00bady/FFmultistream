@@ -10,12 +10,13 @@ import (
 var templateFS embed.FS
 
 type templates struct {
-	index  *template.Template
-	add    *template.Template
-	edit   *template.Template
-	origin *template.Template
-	logs   *template.Template
-	login  *template.Template
+	index     *template.Template
+	add       *template.Template
+	edit      *template.Template
+	origin    *template.Template
+	originNew *template.Template
+	logs      *template.Template
+	login     *template.Template
 }
 
 func loadTemplates() (*templates, error) {
@@ -41,6 +42,9 @@ func loadTemplates() (*templates, error) {
 		return nil, err
 	}
 	if t.origin, err = parse("origin.html"); err != nil {
+		return nil, err
+	}
+	if t.originNew, err = parse("origin_new.html"); err != nil {
 		return nil, err
 	}
 	if t.logs, err = parse("logs.html"); err != nil {

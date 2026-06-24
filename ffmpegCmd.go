@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-func buildFFmpegArgs(cfg Config) []string {
+func buildFFmpegArgs(o Origin) []string {
 	args := []string{
 		"-fflags", "nobuffer",
 		"-flags", "low_delay",
@@ -19,7 +19,7 @@ func buildFFmpegArgs(cfg Config) []string {
 		"-protocol_whitelist", "file,http,https,tcp,tls,rtmp,rtmps,crypto",
 		"-listen", "1",
 		"-timeout", "10",
-		"-i", cfg.Origin,
+		"-i", o.URL,
 		"-map", "0:v",
 		"-map", "0:a",
 		"-c:v", "copy",
@@ -28,34 +28,34 @@ func buildFFmpegArgs(cfg Config) []string {
 	}
 
 	var teeOutputs []string
-	for i, d := range cfg.Destinations {
-		if i < len(cfg.Enabled) && !cfg.Enabled[i] {
+	for _, d := range o.Destinations {
+		if !d.Enabled {
 			continue
 		}
-		teeOutputs = append(teeOutputs, fmt.Sprintf("[f=flv:onfail=ignore]%s/%s", d, cfg.Keys[i]))
+		teeOutputs = append(teeOutputs, fmt.Sprintf("[f=flv:onfail=ignore]%s/%s", d.RTMP, d.Key))
 	}
 	args = append(args, strings.Join(teeOutputs, "|"))
 	return args
 }
 
-func enabledCount(cfg Config) int {
+func enabledCount(o Origin) int {
 	n := 0
-	for i := range cfg.Destinations {
-		if i >= len(cfg.Enabled) || cfg.Enabled[i] {
+	for _, d := range o.Destinations {
+		if d.Enabled {
 			n++
 		}
 	}
 	return n
 }
 
-func startFFmpeg(appState *AppState) error {
-	ctx, args, _, err := appState.BeginRun()
+func startFFmpeg(appState *AppState, oid string) error {
+	ctx, args, logs, err := appState.BeginRun(oid)
 	if err != nil {
 		return err
 	}
-	defer appState.MarkStopped()
+	defer appState.MarkStopped(oid)
 
-	log.Println("ffmpeg", args)
+	log.Printf("ffmpeg [origin=%s] %v", oid, args)
 	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 
 	stderrPipe, err := cmd.StderrPipe()
@@ -68,8 +68,8 @@ func startFFmpeg(appState *AppState) error {
 		return fmt.Errorf("failed to start FFmpeg: %v", err)
 	}
 
-	log.Printf("Starting FFmpeg with PID: %d", cmd.Process.Pid)
-	go scanIntoLogs(stderrPipe, appState.logs)
+	log.Printf("Starting FFmpeg [origin=%s] with PID: %d", oid, cmd.Process.Pid)
+	go scanIntoLogs(stderrPipe, logs)
 
 	waitErr := cmd.Wait()
 	if waitErr != nil && ctx.Err() != context.Canceled {

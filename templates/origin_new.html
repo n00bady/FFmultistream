@@ -1,0 +1,17 @@
+{{define "body"}}
+<h2>Add origin</h2>
+<div class="card card-pad">
+  <form method="post" action="/origins">
+    <div class="form-row">
+      <label for="origin">Origin URL</label>
+      <input type="text" name="origin" id="origin" placeholder="rtmp://0.0.0.0:1935/test" autofocus required>
+      <p class="field-hint">The RTMP URL ffmpeg will listen on for this origin. Each origin gets its own ffmpeg process.</p>
+    </div>
+    <div class="form-actions">
+      <input type="submit" class="primary" value="Add origin">
+      <a class="btn ghost" href="/">Cancel</a>
+    </div>
+  </form>
+</div>
+{{end}}
+{{template "base" .}}

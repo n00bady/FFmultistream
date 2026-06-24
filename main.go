@@ -67,10 +67,7 @@ func initApp() (*AppState, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &AppState{
-		config: config,
-		logs:   newRingBuffer(500),
-	}, nil
+	return newAppState(config), nil
 }
 
 func browserHost(addr string) string {

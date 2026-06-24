@@ -33,17 +33,23 @@ func newServer(state *AppState, tpl *templates) *Server {
 func (s *Server) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
-	mux.HandleFunc("POST /destinations", s.handleAddDestination)
-	mux.HandleFunc("GET /destinations/new", s.handleAddDestinationForm)
-	mux.HandleFunc("GET /destinations/{i}/edit", s.handleEditDestination)
-	mux.HandleFunc("POST /destinations/{i}", s.handleUpdateDestination)
-	mux.HandleFunc("POST /destinations/{i}/delete", s.handleDeleteDestination)
-	mux.HandleFunc("POST /destinations/{i}/toggle", s.handleToggleDestination)
-	mux.HandleFunc("GET /origin/edit", s.handleEditOriginForm)
-	mux.HandleFunc("POST /origin", s.handleUpdateOrigin)
-	mux.HandleFunc("POST /stream/start", s.handleStartStream)
-	mux.HandleFunc("POST /stream/stop", s.handleStopStream)
-	mux.HandleFunc("GET /logs", s.handleLogs)
+
+	mux.HandleFunc("GET /origins/new", s.handleAddOriginForm)
+	mux.HandleFunc("POST /origins", s.handleAddOrigin)
+	mux.HandleFunc("GET /origins/{oid}/edit", s.handleEditOriginForm)
+	mux.HandleFunc("POST /origins/{oid}", s.handleUpdateOrigin)
+	mux.HandleFunc("POST /origins/{oid}/delete", s.handleDeleteOrigin)
+	mux.HandleFunc("POST /origins/{oid}/start", s.handleStartStream)
+	mux.HandleFunc("POST /origins/{oid}/stop", s.handleStopStream)
+	mux.HandleFunc("GET /origins/{oid}/logs", s.handleLogs)
+
+	mux.HandleFunc("GET /origins/{oid}/destinations/new", s.handleAddDestinationForm)
+	mux.HandleFunc("POST /origins/{oid}/destinations", s.handleAddDestination)
+	mux.HandleFunc("GET /origins/{oid}/destinations/{i}/edit", s.handleEditDestination)
+	mux.HandleFunc("POST /origins/{oid}/destinations/{i}", s.handleUpdateDestination)
+	mux.HandleFunc("POST /origins/{oid}/destinations/{i}/delete", s.handleDeleteDestination)
+	mux.HandleFunc("POST /origins/{oid}/destinations/{i}/toggle", s.handleToggleDestination)
+
 	mux.HandleFunc("GET /login", s.handleLoginGET)
 	mux.HandleFunc("POST /login", s.handleLoginPOST)
 	mux.HandleFunc("POST /logout", s.handleLogout)
@@ -74,20 +80,22 @@ func (s *Server) revokeSession(token string) {
 }
 
 var flashMessages = map[string]string{
-	"added":      "Destination added.",
-	"saved":      "Saved.",
-	"deleted":    "Destination deleted.",
-	"started":    "Stream started.",
-	"stopped":    "Stream stopped.",
-	"paused":     "Destination paused.",
-	"resumed":    "Destination resumed.",
-	"logged_out": "Signed out.",
+	"origin_added":   "Origin added.",
+	"origin_deleted": "Origin deleted.",
+	"added":          "Destination added.",
+	"saved":          "Saved.",
+	"deleted":        "Destination deleted.",
+	"started":        "Stream started.",
+	"stopped":        "Stream stopped.",
+	"paused":         "Destination paused.",
+	"resumed":        "Destination resumed.",
+	"logged_out":     "Signed out.",
 }
 
 var flashErrors = map[string]string{
 	"invalid_rtmp":    "RTMP URL is not valid.",
 	"invalid_key":     "Stream key cannot be empty.",
-	"not_found":       "Destination not found.",
+	"not_found":       "Resource not found.",
 	"already_running": "Stream is already running.",
 	"not_running":     "Stream is not running.",
 	"no_destinations": "No destinations configured.",
@@ -99,8 +107,7 @@ var flashErrors = map[string]string{
 }
 
 type baseView struct {
-	Config    Config
-	Running   bool
+	Origins   []OriginView
 	Flash     string
 	FlashErr  string
 	NavActive string
@@ -110,16 +117,35 @@ type indexView struct {
 	baseView
 }
 
-type editView struct {
+type addOriginView struct {
 	baseView
-	Index int
-	RTMP  string
-	Key   string
+}
+
+type editOriginView struct {
+	baseView
+	OriginID string
+	URL      string
+}
+
+type addDestinationView struct {
+	baseView
+	OriginID string
+}
+
+type editDestinationView struct {
+	baseView
+	OriginID string
+	Index    int
+	RTMP     string
+	Key      string
 }
 
 type logsView struct {
 	baseView
-	Logs []string
+	OriginID  string
+	OriginURL string
+	Running   bool
+	Logs      []string
 }
 
 type loginView struct {
@@ -129,10 +155,8 @@ type loginView struct {
 }
 
 func (s *Server) snapshot(r *http.Request) baseView {
-	cfg, running := s.state.Snapshot()
 	return baseView{
-		Config:   cfg,
-		Running:  running,
+		Origins:  s.state.Snapshot(),
 		Flash:    flashMessages[r.URL.Query().Get("msg")],
 		FlashErr: flashErrors[r.URL.Query().Get("err")],
 	}
@@ -177,57 +201,148 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	s.render(w, s.tpl.index, indexView{baseView: base})
 }
 
-func (s *Server) handleAddDestinationForm(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleAddOriginForm(w http.ResponseWriter, r *http.Request) {
 	base := s.snapshot(r)
 	base.NavActive = "home"
-	s.render(w, s.tpl.add, base)
+	s.render(w, s.tpl.originNew, addOriginView{baseView: base})
+}
+
+func (s *Server) handleAddOrigin(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		redirectFlash(w, r, "/origins/new", "err", "invalid_rtmp")
+		return
+	}
+	rtmpURL := strings.TrimSpace(r.PostFormValue("origin"))
+	if !IsvalidRTMP(rtmpURL) {
+		redirectFlash(w, r, "/origins/new", "err", "invalid_rtmp")
+		return
+	}
+
+	s.state.AddOrigin(rtmpURL)
+	if err := SaveConfig(s.state.configForSave()); err != nil {
+		log.Printf("SaveConfig failed: %v", err)
+		redirectFlash(w, r, "/", "err", "save_failed")
+		return
+	}
+	redirectFlash(w, r, "/", "msg", "origin_added")
+}
+
+func (s *Server) handleEditOriginForm(w http.ResponseWriter, r *http.Request) {
+	oid := r.PathValue("oid")
+	view, ok := s.state.OriginView(oid)
+	if !ok {
+		redirectFlash(w, r, "/", "err", "not_found")
+		return
+	}
+	base := s.snapshot(r)
+	base.NavActive = "home"
+	s.render(w, s.tpl.origin, editOriginView{
+		baseView: base,
+		OriginID: view.ID,
+		URL:      view.URL,
+	})
+}
+
+func (s *Server) handleUpdateOrigin(w http.ResponseWriter, r *http.Request) {
+	oid := r.PathValue("oid")
+	if err := r.ParseForm(); err != nil {
+		redirectFlash(w, r, "/origins/"+oid+"/edit", "err", "invalid_rtmp")
+		return
+	}
+	rtmpURL := strings.TrimSpace(r.PostFormValue("origin"))
+	if !IsvalidRTMP(rtmpURL) {
+		redirectFlash(w, r, "/origins/"+oid+"/edit", "err", "invalid_rtmp")
+		return
+	}
+	if !s.state.UpdateOrigin(oid, rtmpURL) {
+		redirectFlash(w, r, "/", "err", "not_found")
+		return
+	}
+	if err := SaveConfig(s.state.configForSave()); err != nil {
+		log.Printf("SaveConfig failed: %v", err)
+		redirectFlash(w, r, "/", "err", "save_failed")
+		return
+	}
+	redirectFlash(w, r, "/", "msg", "saved")
+}
+
+func (s *Server) handleDeleteOrigin(w http.ResponseWriter, r *http.Request) {
+	oid := r.PathValue("oid")
+	if !s.state.DeleteOrigin(oid) {
+		redirectFlash(w, r, "/", "err", "not_found")
+		return
+	}
+	if err := SaveConfig(s.state.configForSave()); err != nil {
+		log.Printf("SaveConfig failed: %v", err)
+		redirectFlash(w, r, "/", "err", "save_failed")
+		return
+	}
+	redirectFlash(w, r, "/", "msg", "origin_deleted")
+}
+
+func (s *Server) handleAddDestinationForm(w http.ResponseWriter, r *http.Request) {
+	oid := r.PathValue("oid")
+	if _, ok := s.state.OriginView(oid); !ok {
+		redirectFlash(w, r, "/", "err", "not_found")
+		return
+	}
+	base := s.snapshot(r)
+	base.NavActive = "home"
+	s.render(w, s.tpl.add, addDestinationView{baseView: base, OriginID: oid})
 }
 
 func (s *Server) handleAddDestination(w http.ResponseWriter, r *http.Request) {
+	oid := r.PathValue("oid")
 	if err := r.ParseForm(); err != nil {
-		redirectFlash(w, r, "/destinations/new", "err", "invalid_rtmp")
+		redirectFlash(w, r, "/origins/"+oid+"/destinations/new", "err", "invalid_rtmp")
 		return
 	}
 	rtmp := strings.TrimSpace(r.PostFormValue("rtmp"))
 	key := strings.TrimSpace(r.PostFormValue("key"))
 	if !IsvalidRTMP(rtmp) {
-		redirectFlash(w, r, "/destinations/new", "err", "invalid_rtmp")
+		redirectFlash(w, r, "/origins/"+oid+"/destinations/new", "err", "invalid_rtmp")
 		return
 	}
 	if !IsvalidKEY(key) {
-		redirectFlash(w, r, "/destinations/new", "err", "invalid_key")
+		redirectFlash(w, r, "/origins/"+oid+"/destinations/new", "err", "invalid_key")
 		return
 	}
-
-	cfg := s.state.AddDestination(rtmp, key)
-	if err := SaveConfig(cfg); err != nil {
+	if !s.state.AddDestination(oid, rtmp, key) {
+		redirectFlash(w, r, "/", "err", "not_found")
+		return
+	}
+	if err := SaveConfig(s.state.configForSave()); err != nil {
 		log.Printf("SaveConfig failed: %v", err)
-		redirectFlash(w, r, "/destinations/new", "err", "save_failed")
+		redirectFlash(w, r, "/origins/"+oid+"/destinations/new", "err", "save_failed")
 		return
 	}
 	redirectFlash(w, r, "/", "msg", "added")
 }
 
 func (s *Server) handleEditDestination(w http.ResponseWriter, r *http.Request) {
+	oid := r.PathValue("oid")
 	idx, ok := s.parseIndex(w, r)
 	if !ok {
 		return
 	}
-	base := s.snapshot(r)
-	base.NavActive = "home"
-	if idx < 0 || idx >= len(base.Config.Destinations) {
+	view, ok := s.state.OriginView(oid)
+	if !ok || idx < 0 || idx >= len(view.Destinations) {
 		redirectFlash(w, r, "/", "err", "not_found")
 		return
 	}
-	s.render(w, s.tpl.edit, editView{
+	base := s.snapshot(r)
+	base.NavActive = "home"
+	s.render(w, s.tpl.edit, editDestinationView{
 		baseView: base,
+		OriginID: oid,
 		Index:    idx,
-		RTMP:     base.Config.Destinations[idx],
-		Key:      base.Config.Keys[idx],
+		RTMP:     view.Destinations[idx].RTMP,
+		Key:      view.Destinations[idx].Key,
 	})
 }
 
 func (s *Server) handleUpdateDestination(w http.ResponseWriter, r *http.Request) {
+	oid := r.PathValue("oid")
 	idx, ok := s.parseIndex(w, r)
 	if !ok {
 		return
@@ -246,13 +361,11 @@ func (s *Server) handleUpdateDestination(w http.ResponseWriter, r *http.Request)
 		redirectFlash(w, r, "/", "err", "invalid_key")
 		return
 	}
-
-	cfg, ok := s.state.UpdateDestination(idx, rtmp, key)
-	if !ok {
+	if !s.state.UpdateDestination(oid, idx, rtmp, key) {
 		redirectFlash(w, r, "/", "err", "not_found")
 		return
 	}
-	if err := SaveConfig(cfg); err != nil {
+	if err := SaveConfig(s.state.configForSave()); err != nil {
 		log.Printf("SaveConfig failed: %v", err)
 		redirectFlash(w, r, "/", "err", "save_failed")
 		return
@@ -261,17 +374,16 @@ func (s *Server) handleUpdateDestination(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleDeleteDestination(w http.ResponseWriter, r *http.Request) {
+	oid := r.PathValue("oid")
 	idx, ok := s.parseIndex(w, r)
 	if !ok {
 		return
 	}
-
-	cfg, ok := s.state.DeleteDestination(idx)
-	if !ok {
+	if !s.state.DeleteDestination(oid, idx) {
 		redirectFlash(w, r, "/", "err", "not_found")
 		return
 	}
-	if err := SaveConfig(cfg); err != nil {
+	if err := SaveConfig(s.state.configForSave()); err != nil {
 		log.Printf("SaveConfig failed: %v", err)
 		redirectFlash(w, r, "/", "err", "save_failed")
 		return
@@ -279,81 +391,68 @@ func (s *Server) handleDeleteDestination(w http.ResponseWriter, r *http.Request)
 	redirectFlash(w, r, "/", "msg", "deleted")
 }
 
-func (s *Server) handleEditOriginForm(w http.ResponseWriter, r *http.Request) {
-	base := s.snapshot(r)
-	base.NavActive = "home"
-	s.render(w, s.tpl.origin, base)
-}
-
-func (s *Server) handleUpdateOrigin(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		redirectFlash(w, r, "/origin/edit", "err", "invalid_rtmp")
-		return
-	}
-	origin := strings.TrimSpace(r.PostFormValue("origin"))
-	if !IsvalidRTMP(origin) {
-		redirectFlash(w, r, "/origin/edit", "err", "invalid_rtmp")
-		return
-	}
-
-	cfg := s.state.SetOrigin(origin)
-	if err := SaveConfig(cfg); err != nil {
-		log.Printf("SaveConfig failed: %v", err)
-		redirectFlash(w, r, "/origin/edit", "err", "save_failed")
-		return
-	}
-	redirectFlash(w, r, "/", "msg", "saved")
-}
-
 func (s *Server) handleStartStream(w http.ResponseWriter, r *http.Request) {
-	if err := s.state.CanStart(); err != nil {
+	oid := r.PathValue("oid")
+	if err := s.state.CanStart(oid); err != nil {
 		redirectFlash(w, r, "/", "err", startErrorCode(err))
 		return
 	}
 	go func() {
-		if err := startFFmpeg(s.state); err != nil {
-			log.Printf("ffmpeg error: %v", err)
+		if err := startFFmpeg(s.state, oid); err != nil {
+			log.Printf("ffmpeg [origin=%s] error: %v", oid, err)
 		}
 	}()
 	redirectFlash(w, r, "/", "msg", "started")
 }
 
 func (s *Server) handleStopStream(w http.ResponseWriter, r *http.Request) {
-	if !s.state.Running() {
+	oid := r.PathValue("oid")
+	if !s.state.OriginRunning(oid) {
 		redirectFlash(w, r, "/", "err", "not_running")
 		return
 	}
-	s.state.Stop()
+	s.state.StopOrigin(oid)
 	redirectFlash(w, r, "/", "msg", "stopped")
 }
 
 func (s *Server) handleToggleDestination(w http.ResponseWriter, r *http.Request) {
+	oid := r.PathValue("oid")
 	idx, ok := s.parseIndex(w, r)
 	if !ok {
 		return
 	}
 
-	cfg, nowEnabled, wasRunning, ok := s.state.ToggleDestination(idx)
+	nowEnabled, wasRunning, ok := s.state.ToggleDestination(oid, idx)
 	if !ok {
 		redirectFlash(w, r, "/", "err", "not_found")
 		return
 	}
-	if err := SaveConfig(cfg); err != nil {
+	if err := SaveConfig(s.state.configForSave()); err != nil {
 		log.Printf("SaveConfig failed: %v", err)
 		redirectFlash(w, r, "/", "err", "save_failed")
 		return
 	}
 
 	if wasRunning {
-		if done := s.state.Stop(); done != nil {
+		if done := s.state.StopOrigin(oid); done != nil {
 			<-done
 		}
-		if enabledCount(cfg) > 0 {
-			go func() {
-				if err := startFFmpeg(s.state); err != nil {
-					log.Printf("ffmpeg restart error: %v", err)
+		view, ok := s.state.OriginView(oid)
+		if ok {
+			anyEnabled := false
+			for _, d := range view.Destinations {
+				if d.Enabled {
+					anyEnabled = true
+					break
 				}
-			}()
+			}
+			if anyEnabled {
+				go func() {
+					if err := startFFmpeg(s.state, oid); err != nil {
+						log.Printf("ffmpeg restart [origin=%s] error: %v", oid, err)
+					}
+				}()
+			}
 		}
 	}
 
@@ -365,10 +464,22 @@ func (s *Server) handleToggleDestination(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
+	oid := r.PathValue("oid")
+	view, ok := s.state.OriginView(oid)
+	if !ok {
+		redirectFlash(w, r, "/", "err", "not_found")
+		return
+	}
+	lines, _ := s.state.Logs(oid)
 	base := s.snapshot(r)
-	base.NavActive = "logs"
-	lines := s.state.logs.Snapshot()
-	s.render(w, s.tpl.logs, logsView{baseView: base, Logs: lines})
+	base.NavActive = "home"
+	s.render(w, s.tpl.logs, logsView{
+		baseView:  base,
+		OriginID:  view.ID,
+		OriginURL: view.URL,
+		Running:   view.Running,
+		Logs:      lines,
+	})
 }
 
 func (s *Server) parseIndex(w http.ResponseWriter, r *http.Request) (int, bool) {
@@ -440,6 +551,8 @@ func startErrorCode(err error) string {
 		return "no_destinations"
 	case errors.Is(err, errNoEnabled):
 		return "no_enabled"
+	case errors.Is(err, errOriginNotFound):
+		return "not_found"
 	default:
 		return "start_failed"
 	}

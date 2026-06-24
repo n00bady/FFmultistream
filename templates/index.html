@@ -1,62 +1,89 @@
 {{define "body"}}
-<div class="card stream-hero">
-  <div class="hero-info">
-    <div class="hero-origin">
-      <code class="kbd">{{.Config.Origin}}</code>
-      <a class="icon-link" href="/origin/edit" title="Edit origin" aria-label="Edit origin">
-        <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
-          <path d="M12.146.146a.5.5 0 01.708 0l3 3a.5.5 0 010 .708l-10 10a.5.5 0 01-.168.11l-5 2a.5.5 0 01-.65-.65l2-5a.5.5 0 01.11-.168l10-10zM11.207 2.5L13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 01.5.5v.5h.5a.5.5 0 01.5.5v.5h.293l6.5-6.5z"/>
-        </svg>
-      </a>
-    </div>
-  </div>
-  <div class="hero-action">
-    {{if .Running}}
-    <form class="inline" method="post" action="/stream/stop">
-      <input type="submit" class="danger btn-lg" value="Stop stream">
-    </form>
-    {{else}}
-    <form class="inline" method="post" action="/stream/start">
-      <input type="submit" class="success btn-lg" value="Start stream">
-    </form>
-    {{end}}
-  </div>
-</div>
-
 <div class="section-header">
-  <h2>Destinations</h2>
-  <a class="btn-icon" href="/destinations/new" title="Add destination" aria-label="Add destination">
+  <h2>Origins</h2>
+  <a class="btn-icon" href="/origins/new" title="Add origin" aria-label="Add origin">
     <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
       <path d="M8 2.5a.5.5 0 01.5.5v4.5H13a.5.5 0 010 1H8.5V13a.5.5 0 01-1 0V8.5H3a.5.5 0 010-1h4.5V3a.5.5 0 01.5-.5z"/>
     </svg>
   </a>
 </div>
-{{if .Config.Destinations}}
-<div class="dest-list">
-  {{range $i, $d := .Config.Destinations}}
-    {{$enabled := index $.Config.Enabled $i}}
-    <div class="dest {{if not $enabled}}paused{{end}}">
-      {{if $enabled}}
-        <span class="badge active"><span class="dot"></span>Active</span>
-      {{else}}
-        <span class="badge paused"><span class="dot"></span>Paused</span>
-      {{end}}
-      <div class="dest-url">{{$d}}</div>
-      <div class="dest-actions">
-        <form class="inline" method="post" action="/destinations/{{$i}}/toggle">
-          <input type="submit" value="{{if $enabled}}Pause{{else}}Resume{{end}}">
-        </form>
-        <a class="btn ghost" href="/destinations/{{$i}}/edit">Edit</a>
-        <form class="inline" method="post" action="/destinations/{{$i}}/delete" onsubmit="return confirm('Delete this destination?');">
-          <input type="submit" class="danger" value="Delete">
-        </form>
+
+{{if .Origins}}
+  {{range $oi, $o := .Origins}}
+    <div class="card origin-card">
+      <div class="origin-head">
+        <div class="origin-info">
+          <div class="hero-origin">
+            <code class="kbd">{{$o.URL}}</code>
+            <a class="icon-link" href="/origins/{{$o.ID}}/edit" title="Edit origin" aria-label="Edit origin">
+              <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
+                <path d="M12.146.146a.5.5 0 01.708 0l3 3a.5.5 0 010 .708l-10 10a.5.5 0 01-.168.11l-5 2a.5.5 0 01-.65-.65l2-5a.5.5 0 01.11-.168l10-10zM11.207 2.5L13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 01.5.5v.5h.5a.5.5 0 01.5.5v.5h.293l6.5-6.5z"/>
+              </svg>
+            </a>
+            {{if $o.Running}}
+              <span class="badge active"><span class="dot"></span>Running</span>
+            {{else}}
+              <span class="badge paused"><span class="dot"></span>Stopped</span>
+            {{end}}
+          </div>
+        </div>
+        <div class="origin-actions">
+          {{if $o.Running}}
+          <form class="inline" method="post" action="/origins/{{$o.ID}}/stop">
+            <input type="submit" class="danger" value="Stop">
+          </form>
+          {{else}}
+          <form class="inline" method="post" action="/origins/{{$o.ID}}/start">
+            <input type="submit" class="success" value="Start">
+          </form>
+          {{end}}
+          <a class="btn ghost" href="/origins/{{$o.ID}}/logs">Logs</a>
+          <form class="inline" method="post" action="/origins/{{$o.ID}}/delete" onsubmit="return confirm('Delete this origin and all its destinations?');">
+            <input type="submit" class="danger" value="Delete">
+          </form>
+        </div>
       </div>
+
+      <div class="origin-dest-header">
+        <h3>Destinations</h3>
+        <a class="btn-icon" href="/origins/{{$o.ID}}/destinations/new" title="Add destination" aria-label="Add destination">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+            <path d="M8 2.5a.5.5 0 01.5.5v4.5H13a.5.5 0 010 1H8.5V13a.5.5 0 01-1 0V8.5H3a.5.5 0 010-1h4.5V3a.5.5 0 01.5-.5z"/>
+          </svg>
+        </a>
+      </div>
+      {{if $o.Destinations}}
+      <div class="dest-list">
+        {{range $i, $d := $o.Destinations}}
+          <div class="dest {{if not $d.Enabled}}paused{{end}}">
+            {{if $d.Enabled}}
+              <span class="badge active"><span class="dot"></span>Active</span>
+            {{else}}
+              <span class="badge paused"><span class="dot"></span>Paused</span>
+            {{end}}
+            <div class="dest-url">{{$d.RTMP}}</div>
+            <div class="dest-actions">
+              <form class="inline" method="post" action="/origins/{{$o.ID}}/destinations/{{$i}}/toggle">
+                <input type="submit" value="{{if $d.Enabled}}Pause{{else}}Resume{{end}}">
+              </form>
+              <a class="btn ghost" href="/origins/{{$o.ID}}/destinations/{{$i}}/edit">Edit</a>
+              <form class="inline" method="post" action="/origins/{{$o.ID}}/destinations/{{$i}}/delete" onsubmit="return confirm('Delete this destination?');">
+                <input type="submit" class="danger" value="Delete">
+              </form>
+            </div>
+          </div>
+        {{end}}
+      </div>
+      {{else}}
+      <div class="dest-empty">
+        No destinations yet. Use the <strong>+</strong> button above to add one.
+      </div>
+      {{end}}
     </div>
   {{end}}
-</div>
 {{else}}
 <div class="dest-empty">
-  No destinations yet. Use the <strong>+</strong> button above to add one.
+  No origins yet. Use the <strong>+</strong> button above to add one.
 </div>
 {{end}}
 {{end}}

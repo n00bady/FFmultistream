@@ -131,7 +131,39 @@
   .card + .card { margin-top: .75rem; }
   .card-pad { padding: 1.1rem 1.25rem; }
 
-  /* Stream hero */
+  /* Origin cards */
+  .origin-card { padding: 1rem 1.1rem; }
+  .origin-card + .origin-card { margin-top: 1rem; }
+  .origin-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .85rem;
+    flex-wrap: wrap;
+    margin-bottom: .75rem;
+  }
+  .origin-info { display: flex; flex-direction: column; gap: .25rem; min-width: 0; flex: 1; }
+  .origin-actions { display: flex; gap: .35rem; align-items: center; flex-shrink: 0; flex-wrap: wrap; }
+  .origin-dest-header {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    border-top: 1px solid var(--border);
+    padding-top: .75rem;
+    margin-top: .25rem;
+  }
+  .origin-dest-header h3 {
+    margin: 0;
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--text-muted);
+  }
+  .origin-card .dest-list { margin-top: .5rem; }
+  .origin-card .dest-empty { margin-top: .5rem; padding: 1.2rem 1rem; }
+
+  /* Stream hero (legacy) */
   .stream-hero {
     display: flex;
     flex-direction: column;
@@ -349,8 +381,7 @@
     <h1><span class="dot"></span>FFmultistream</h1>
     <nav class="tabs">
       {{if ne .NavActive "login"}}
-      <a href="/" class="{{if eq .NavActive "home"}}active{{end}}">Stream</a>
-      <a href="/logs" class="{{if eq .NavActive "logs"}}active{{end}}">Logs</a>
+      <a href="/" class="{{if eq .NavActive "home"}}active{{end}}">Streams</a>
       <form class="inline" method="post" action="/logout">
         <button type="submit" class="ghost">Sign out</button>
       </form>
