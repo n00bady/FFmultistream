@@ -1,0 +1,18 @@
+{{define "body"}}
+<h2>Edit origin</h2>
+<div class="card card-pad">
+  <form method="post" action="/origins/{{.OriginID}}">
+    <div class="form-row">
+      <label for="origin">Origin URL</label>
+      <input type="text" name="origin" id="origin" value="{{.URL}}" autofocus required>
+      <p class="field-hint">The RTMP URL ffmpeg listens on. Point OBS at this. Default: <code>rtmp://127.0.0.1:1935/test</code></p>
+    </div>
+    <div class="form-actions">
+      <input type="submit" class="primary" value="Save">
+      <a class="btn ghost" href="/">Cancel</a>
+    </div>
+  </form>
+</div>
+<p class="muted" style="margin-top:.85rem; font-size:.85rem;">Changes take effect on the next stream start.</p>
+{{end}}
+{{template "base" .}}

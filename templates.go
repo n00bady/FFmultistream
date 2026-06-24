@@ -1,0 +1,57 @@
+package main
+
+import (
+	"embed"
+	"fmt"
+	"html/template"
+)
+
+//go:embed templates/*.html
+var templateFS embed.FS
+
+type templates struct {
+	index     *template.Template
+	add       *template.Template
+	edit      *template.Template
+	origin    *template.Template
+	originNew *template.Template
+	logs      *template.Template
+	login     *template.Template
+}
+
+func loadTemplates() (*templates, error) {
+	parse := func(page string) (*template.Template, error) {
+		t, err := template.ParseFS(templateFS, "templates/base.html", "templates/"+page)
+		if err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", page, err)
+		}
+		return t, nil
+	}
+
+	var (
+		t   templates
+		err error
+	)
+	if t.index, err = parse("index.html"); err != nil {
+		return nil, err
+	}
+	if t.add, err = parse("add.html"); err != nil {
+		return nil, err
+	}
+	if t.edit, err = parse("edit.html"); err != nil {
+		return nil, err
+	}
+	if t.origin, err = parse("origin.html"); err != nil {
+		return nil, err
+	}
+	if t.originNew, err = parse("origin_new.html"); err != nil {
+		return nil, err
+	}
+	if t.logs, err = parse("logs.html"); err != nil {
+		return nil, err
+	}
+	if t.login, err = parse("login.html"); err != nil {
+		return nil, err
+	}
+	return &t, nil
+}

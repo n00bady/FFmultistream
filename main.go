@@ -1,71 +1,100 @@
 package main
 
 import (
-	"fmt"
+	"context"
+	"errors"
+	"flag"
 	"log"
+	"net"
+	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"runtime"
 	"syscall"
-
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/app"
+	"time"
 )
 
 func main() {
+	addr := flag.String("uiaddr", "0.0.0.0:8765", "address (host:port) to bind the web UI on")
+	openBrowser := flag.Bool("open", true, "open the UI in the default browser on start")
+	flag.Parse()
+
+	state, err := initApp()
+	if err != nil {
+		log.Fatalf("initialization failed: %v", err)
+	}
+
+	tpl, err := loadTemplates()
+	if err != nil {
+		log.Fatalf("template loading failed: %v", err)
+	}
+
+	srv := newServer(state, tpl)
+	httpServer := &http.Server{
+		Addr:              *addr,
+		Handler:           srv.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	AppInst, err := InitApp(sigChan)
-	if err != nil {
-		log.Fatalf("GUI initialization failed: %v\n", err)
-		AppInst.cancel()
-	}
-
-	var body fyne.CanvasObject
-	body, err = mainView(AppInst)
-	if err != nil {
-		log.Fatalf("mainView failed: %v\n", err)
-	}
-
-	log.Println("Setting fyne App window content...")
-	AppInst.window.SetContent(body)
-
-	AppInst.window.Resize(fyne.NewSize(750, 400))
-
-	log.Println("Running the fyne App...")
-	AppInst.window.ShowAndRun()
-}
-
-func InitApp(sigChan chan os.Signal) (*AppState, error) {
-	myApp := app.NewWithID("FFmultistream")
-	myWindow := myApp.NewWindow("FFmultistream")
-
-	myApp.Settings().SetTheme(&myTheme{})
-
-	appState := &AppState{}
-
-	config, err := LoadConfig()
-	if err != nil {
-		return nil, fmt.Errorf("Cannot load configuration: %v\n", err)
-	}
-
-	appState.running = false
-	appState.config = config
-	appState.window = myWindow
-
-	// stopping ffmpeg first then closing the app
-	myWindow.SetCloseIntercept(func() {
-		stopFFmpeg(appState)
-		myWindow.Close()
-	})
-
-	// goroutine to catch signals
 	go func() {
 		<-sigChan
-		log.Println("Termination signal received stopping FFmpeg and closing the App...")
-		stopFFmpeg(appState)
-		os.Exit(0)
+		log.Println("Termination signal received, stopping FFmpeg and shutting down...")
+		state.Stop()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = httpServer.Shutdown(ctx)
 	}()
 
-	return appState, nil
+	log.Printf("FFmultistream UI is listening on http://%s", *addr)
+	if *openBrowser {
+		go tryOpenBrowser("http://" + browserHost(*addr))
+	}
+
+	if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatalf("http server error: %v", err)
+	}
+
+	state.Stop()
+	log.Println("Goodbye.")
+}
+
+func initApp() (*AppState, error) {
+	config, err := LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	return newAppState(config), nil
+}
+
+func browserHost(addr string) string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	switch host {
+	case "", "0.0.0.0", "::", "[::]":
+		return net.JoinHostPort("127.0.0.1", port)
+	}
+	return addr
+}
+
+func tryOpenBrowser(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		return
+	}
+	if err := cmd.Start(); err != nil {
+		log.Printf("could not open browser automatically: %v (visit %s)", err, url)
+	}
 }

@@ -1,0 +1,19 @@
+{{define "body"}}
+<div class="card card-pad" style="max-width: 360px; margin: 4rem auto 0;">
+  <h2 style="margin-top: 0;">Sign in</h2>
+  <form method="post" action="/login">
+    <div class="form-row">
+      <label for="username">Username</label>
+      <input type="text" name="username" id="username" autocomplete="username" autofocus required>
+    </div>
+    <div class="form-row">
+      <label for="password">Password</label>
+      <input type="password" name="password" id="password" autocomplete="current-password" required>
+    </div>
+    <div class="form-actions">
+      <input type="submit" class="primary" value="Sign in">
+    </div>
+  </form>
+</div>
+{{end}}
+{{template "base" .}}
