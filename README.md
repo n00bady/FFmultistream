@@ -27,12 +27,12 @@ This doesn't use fyne for UI anymore, now its using go templates to create a web
 FFmpeg listener will receive your OBS stream and then push it as is to all the services you have added, might need to wait a few seconds before the services start receiving your stream.
 
 ### Flags
-- `-open=false` to stop it from opening the browser.
-- `-uiaddr=(host:port)` to bind it to host:port of your choice.
+- `-open=false` to stop it from opening the browser, it's true by default.
+- `-uiaddr=(host:port)` to bind the web UI to host:port of your choice, it's 0.0.0.0:8765 by deefault.
 
 ### Notes
 Make sure to start the FFmpeg first via the Start button and then start your stream from from OBS otherwhise OBS will not find the listener.  
-When running from a remote location make sure you configure the host:port fom both the web UI and the ffmpeg Origin (you can even have multiple origins too by clicking the `+` button next to `ORIGINS`.
+When running from a remote location make sure you configure the host:port for both the web UI and the ffmpeg Origin (you can even have multiple origins too by clicking the `+` button next to `ORIGINS`.
 
 
 ## Building
